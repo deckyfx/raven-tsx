@@ -172,6 +172,9 @@ export const Rating = tag<Props.RatingProps>("Rating");
 /** Page numbers with previous and next. */
 export const Pagination = tag<Props.PaginationProps>("Pagination");
 
+/** The pages of a PDF document, scrolled and zoomed (drawn by PDFium, loaded at run time). */
+export const PdfView = tag<Props.PdfViewProps>("PdfView");
+
 /** Curves of X / Y data: Series elements (Name, Color, Line, LineWidth, Marker, MarkerSize, MarkerFilled, Step, Fill, XAxis, Axis, MaxPoints, X and Y lists or Points "x,y x,y"), Scatter elements, and DragLine elements (Axis, Value, Label, Color). */
 export const Plot = tag<Props.PlotProps>("Plot");
 

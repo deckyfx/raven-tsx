@@ -137,6 +137,11 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	],
 	Rating: [{ attribute: "Value", read: (widget) => numberText(r.Rrating_get_value(widget)) }],
 	Pagination: [{ attribute: "Page", read: (widget) => numberText(r.Rpagination_get_page(widget)) }],
+	PdfView: [
+		// (counted from 1, as the attribute is written; C counts from 0)
+		{ attribute: "Page", read: (widget) => numberText(r.Rpdf_view_get_page(widget) + 1) },
+		{ attribute: "Zoom", read: (widget) => numberText(r.Rpdf_view_get_zoom(widget)), unreported: true },
+	],
 	DatePicker: [{
 		attribute: "Date",
 		read: (widget) => {

@@ -1,6 +1,7 @@
 import type { Pointer } from "bun:ffi";
 import { nativeCallback } from "#backend";
 import type { NativeArg, NativeCallback, NativeValue, StructType } from "./backend/types";
+import { COLOR, colorOf } from "./color";
 import * as r from "./raven";
 import type { EventHandler } from "./props";
 
@@ -22,6 +23,10 @@ type MeasureHandler = () => MeasuredSize;
 type ListTextHandler = (index: number) => string;
 type TileFillHandler = (index: number, item: r.RTileItem) => void;
 type CellTextHandler = (row: number, column: number) => string;
+/** The color of an item, or of a cell: nothing, null or "" is the one of the theme. */
+type ColorHandler = (...position: number[]) => string | null | void;
+/** `OnKeyboard` of a window: the keyboard on the screen, as it shows or hides. */
+type KeyboardHandler = (visible: boolean, height: number) => void;
 
 /** What a `Plot` shows, by axis: the lowest and the highest value of each. */
 export interface PlotView {
@@ -205,6 +210,8 @@ const indexEvent = (connect: Connect): NativeEvent => valueEvent<number>(connect
 const idEvent = (connect: Connect): NativeEvent => valueEvent<r.Rid>(connect, "u32", numberOf);
 const floatEvent = (connect: Connect): NativeEvent => valueEvent<number>(connect, "f32", numberOf);
 const doubleEvent = (connect: Connect): NativeEvent => valueEvent<number>(connect, "f64", numberOf);
+/** The page C gives, from 0, as the attribute `Page` counts it: from 1. */
+const pageEvent = (connect: Connect): NativeEvent => valueEvent<number>(connect, "i32", (value) => numberOf(value) + 1);
 
 /** An event that gives what C gives as it is. `args` are the types after the widget. */
 function directEvent(connect: Connect, args: readonly NativeArg[]): NativeEvent {
@@ -294,10 +301,50 @@ function structEvent(connect: Connect, struct: StructType): NativeEvent {
 	}));
 }
 
+/**
+ * The color of an item, asked for as it is drawn: `ItemColor` of a ListView, `CellColor` of a Table.
+ * `position` is the number of the arguments after the widget that say which (an index; a row and
+ * a column). The function answers `#RRGGBB` or `#RRGGBBAA`, which C reads from the four floats it
+ * gives, or nothing for the color of the theme. It runs while a frame is drawn: nothing is committed.
+ */
+function colorEvent(connect: Connect, position: number): NativeEvent {
+	const args: NativeArg[] = [...Array<NativeArg>(position).fill("i32"), "float", "float", "float", "float"];
+	return new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", ...args], "i32", (id, ...values) => {
+		const handler = handlerOf(widgetOf(id)) as ColorHandler | undefined;
+		const channels = values.slice(position, position + 4);
+		let given = 0;
+		if (handler && channels.every((channel) => channel instanceof Float32Array)) {
+			eventScope.guard(() => {
+				const color = handler(...values.slice(0, position).map(numberOf));
+				if (color === undefined || color === null || color === "") {
+					return;
+				}
+				if (!COLOR.test(color)) {
+					throw new Error(`raven-tsx: a color is #RRGGBB or #RRGGBBAA, not "${color}"`);
+				}
+				colorOf(color).forEach((value, index) => {
+					(channels[index] as Float32Array)[0] = value;
+				});
+				given = 1;
+			});
+		}
+		return given;
+	}));
+}
+
+/** `OnKeyboard` of a window: whether the keyboard on the screen shows, and its height. */
+const keyboardEvent = new NativeEvent(r.Rwindow_set_keyboard_callback, (handlerOf) => nativeCallback(["u32", "i32", "f32"], "void", (id, visible, height) => {
+	const handler = handlerOf(widgetOf(id)) as KeyboardHandler | undefined;
+	if (handler) {
+		eventScope.run(() => handler(visible !== 0, numberOf(height)));
+	}
+}));
+
 /** The events of a window, which are not widgets. `OnClose` is apart: without it, Raven closes. */
 export const WINDOW_EVENTS: Readonly<Record<string, NativeEvent>> = {
 	OnResize: directEvent(r.Rwindow_set_resize_callback, ["i32", "i32"]),
 	OnDrop: structEvent(r.Rwindow_set_drop_callback, r.RDropEvent),
+	OnKeyboard: keyboardEvent,
 };
 
 /**
@@ -382,6 +429,7 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 	ListView: {
 		OnChanged: indexEvent(r.Rlist_view_set_selection_changed_callback),
 		OnActivated: indexEvent(r.Rlist_view_set_activated_callback),
+		ItemColor: colorEvent(r.Rlist_view_set_item_color_callback, 1),
 	},
 	TreeView: {
 		OnChanged: idEvent(r.Rtree_view_set_selection_changed_callback),
@@ -398,11 +446,13 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 		OnChanged: indexEvent(r.Rtable_set_selection_changed_callback),
 		OnActivated: indexEvent(r.Rtable_set_activated_callback),
 		OnSort: indexAndFlagEvent(r.Rtable_set_sort_callback),
+		CellColor: colorEvent(r.Rtable_set_cell_color_callback, 2),
 	},
 	DatePicker: { OnChanged: threeNumbersEvent(r.Rdate_picker_set_changed_callback, (year, month, day) => `${year}-${two(month)}-${two(day)}`) },
 	TimePicker: { OnChanged: threeNumbersEvent(r.Rtime_picker_set_changed_callback, (hour, minute, second) => `${two(hour)}:${two(minute)}:${two(second)}`) },
 	Rating: { OnChanged: floatEvent(r.Rrating_set_changed_callback) },
 	Pagination: { OnChanged: indexEvent(r.Rpagination_set_changed_callback) },
+	PdfView: { OnChanged: pageEvent(r.Rpdf_view_set_page_changed_callback) },
 	Plot: {
 		OnChanged: directEvent(r.Rplot_set_drag_line_callback, ["i32", "f64"]),
 		OnViewChanged: readEvent(r.Rplot_set_view_changed_callback, [], (plot): PlotView => ({
@@ -575,6 +625,7 @@ export const EVENT_VALUE_TYPES: Readonly<Record<string, Readonly<Record<string, 
 	TimePicker: { OnChanged: "string" },
 	Rating: { OnChanged: "number" },
 	Pagination: { OnChanged: "number" },
+	PdfView: { OnChanged: "number" },
 	Plot: { OnChanged: "line: number, value: number" },
 	Breadcrumb: { OnClicked: "number" },
 	TextEditor: { OnChanged: "string" },
@@ -612,7 +663,11 @@ export const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
 		"readonly OnPaint?: (painter: Painter, width: number, height: number) => void",
 		"readonly OnMeasure?: () => MeasuredSize",
 	],
-	ListView: ["readonly ItemCount?: number", "readonly ItemText?: (index: number) => string"],
+	ListView: [
+		"readonly ItemCount?: number",
+		"readonly ItemText?: (index: number) => string",
+		"readonly ItemColor?: (index: number) => string | null | void",
+	],
 	// (the schema of Raven does not list this event, which exists)
 	TileView: [
 		"readonly ItemCount?: number",
@@ -623,6 +678,7 @@ export const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
 	Table: [
 		"readonly RowCount?: number",
 		"readonly CellText?: (row: number, column: number) => string",
+		"readonly CellColor?: (row: number, column: number) => string | null | void",
 		"readonly OnChanged?: (row: number) => void",
 		"readonly OnSort?: (column: number, descending: boolean) => void",
 		MARKUP,

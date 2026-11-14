@@ -43,6 +43,7 @@ describe("what is followed", () => {
 	test("examples with no port and the build files are not, and a new example is", () => {
 		expect(isFollowed("examples/bevy_editor/src/main.rs")).toBe(false);
 		expect(isFollowed("examples/languages/python/main.py")).toBe(false);
+		expect(isFollowed("examples/mobile/shared/showcase.c")).toBe(false);
 		expect(isFollowed("examples/CMakeLists.txt")).toBe(false);
 		expect(isFollowed("examples/music/main.c")).toBe(true);
 		expect(isFollowed("examples/brand_new/main.c")).toBe(true);
