@@ -168,18 +168,24 @@ function addItems(tree: raven.Rid, parent: raven.Rid, items: readonly LibraryIte
 }
 
 /** A label and a switch on one line. `action` is the name of an action to fire when it changes. */
-function SwitchRow({ label, checked, action }: { readonly label: string; readonly checked?: boolean; readonly action?: string }): ReactNode {
+function SwitchRow({ label, checked, onChanged }: { readonly label: string; readonly checked?: boolean; readonly onChanged?: (checked: boolean) => void }): ReactNode {
 	return (
 		<HBox>
 			<Label Slot={{ Fill: 1, VAlign: "Center" }}>{label}</Label>
-			<Checkbox Style="Switch" Checked={checked} OnChanged={action} />
+			<Checkbox Style="Switch" Checked={checked} OnChanged={onChanged} />
 		</HBox>
 	);
+}
+
+/** Switches between the dark glass and the light one: not the built-in "theme.toggle", whose looks are not glass. */
+function applyGlass(dark: boolean): void {
+	raven.Rtheme_apply(dark ? raven.R_THEME_GLASS_DARK : raven.R_THEME_GLASS_LIGHT);
 }
 
 /** The side bar, of frosted glass. */
 const SideBar = memo(function SideBar(): ReactNode {
 	const tree = useRef<WidgetInstance>(null);
+	const [dark, setDark] = useState(!START_LIGHT);
 
 	useEffect(() => {
 		if (tree.current) {
@@ -194,8 +200,14 @@ const SideBar = memo(function SideBar(): ReactNode {
 				<TextInput Placeholder="Search" />
 				<TreeView ref={tree} Slot={{ Fill: 1 }} />
 				<Separator />
-				{/* The built-in action, as in the original: it goes to the look of Raven, dark or light, which is not glass. */}
-				<SwitchRow label="Dark glass" checked={!START_LIGHT} action="theme.toggle" />
+				<SwitchRow
+					label="Dark glass"
+					checked={dark}
+					onChanged={(checked) => {
+						setDark(checked);
+						applyGlass(checked);
+					}}
+				/>
 				<SwitchRow label="Crossfade" />
 				<Label Opacity={0.7}>Volume</Label>
 				<Slider Value={0.62} />
@@ -343,5 +355,5 @@ function App(): ReactNode {
 await runApp(<App />, undefined, {
 	appName: "glass",
 	// before the window is built: sizes depend on the metrics of the theme
-	setup: () => raven.Rtheme_apply(START_LIGHT ? raven.R_THEME_GLASS_LIGHT : raven.R_THEME_GLASS_DARK),
+	setup: () => applyGlass(!START_LIGHT),
 });
