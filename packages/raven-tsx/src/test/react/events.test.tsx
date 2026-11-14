@@ -1,6 +1,6 @@
 /** The events, props and tree rules added after the first ones, on real widgets, with real input where it can be injected. */
 
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { ptr, type Pointer } from "bun:ffi";
 import { tmpdir } from "node:os";
 import { createContext, createRef, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
@@ -1139,6 +1139,66 @@ test("a ListView and a Table ask for the color of what they draw, and one that i
 		expect(cells).toEqual([]);
 	} finally {
 		console.error = error;
+	}
+});
+
+test("a new color function of a ListView or a Table is asked for at once, with nothing else changed", async () => {
+	const asked: string[] = [];
+	// (the same function at each render: only the color changes)
+	const cellText = (): string => "x";
+	function Lists({ shade }: { shade: string }): ReactNode {
+		return (
+			<VBox>
+				<ListView Name="list" Height={100} Items={["a", "b"]} ItemColor={() => void asked.push(`row ${shade}`)} />
+				<Table Name="table" Height={100} Columns={["A"]} RowCount={1} CellText={cellText} CellColor={() => void asked.push(`cell ${shade}`)} />
+			</VBox>
+		);
+	}
+	await mount(<Lists shade="first" />);
+	expect(asked).toContain("row first");
+	expect(asked).toContain("cell first");
+	asked.length = 0;
+	// (no frame draws them again by itself)
+	await settle();
+	expect(asked).toEqual([]);
+	root?.render(<Lists shade="second" />);
+	await settle();
+	expect(asked).toContain("row second");
+	expect(asked).toContain("cell second");
+	expect(asked.filter((item) => item.endsWith("first"))).toEqual([]);
+});
+
+test("a PdfView sets each Page asked for before a document, and Zoom whatever the fit made of it", async () => {
+	const set: string[] = [];
+	const setAttribute = r.Rwidget_set_attribute;
+	const spy = spyOn(r, "Rwidget_set_attribute").mockImplementation((widget, name, value) => {
+		if (name === "Page" || name === "Zoom") {
+			set.push(`${name}=${value}`);
+		}
+		return setAttribute(widget, name, value);
+	});
+	try {
+		function Reader({ page, zoom }: { page: number; zoom?: number }): ReactNode {
+			return <VBox><PdfView Name="pdf" Height={120} Page={page} Zoom={zoom} /></VBox>;
+		}
+		await mount(<Reader page={3} />);
+		root?.render(<Reader page={1} />);
+		await settle();
+		// (no document: C keeps the page for the one to come, and says 0 meanwhile)
+		expect(set).toEqual(["Page=3", "Page=1"]);
+		const pdf = find("pdf");
+		expect(r.Rpdf_view_get_fit(pdf)).not.toBe(r.R_PDF_FIT_NONE);
+		const zoom = r.Rpdf_view_get_zoom(pdf);
+		root?.render(<Reader page={1} zoom={zoom} />);
+		await settle();
+		expect(set.at(-1)).toBe(`Zoom=${zoom}`);
+		expect(r.Rpdf_view_get_fit(pdf)).toBe(r.R_PDF_FIT_NONE);
+		set.length = 0;
+		root?.render(<Reader page={1} zoom={zoom} />);
+		await settle();
+		expect(set).toEqual([]);
+	} finally {
+		spy.mockRestore();
 	}
 });
 
