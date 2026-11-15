@@ -20,8 +20,11 @@ import { checkoutPath, commitOf, fail, flag, git, PACKAGE_ROOT, readPin, type Fi
 const DRIFT_FILE = `${PACKAGE_ROOT}/drift.txt`;
 /** What raven-tsx copies or mirrors. Headers are not here: `raven:status` compares them by meaning. */
 const FOLLOWED_PATHS = ["examples", "src/widgets", "src/widget", "src/xml"];
-/** Examples with no port on purpose, and the build files beside the examples. A new example is followed by itself. */
-const IGNORED = [/^examples\/(bevy_editor|languages)\//, /^examples\/[^/]+$/];
+/**
+ * Examples with no port on purpose, and the build files beside the examples. A new example is
+ * followed by itself. (mobile: an application of iOS and Android, where neither Bun nor Node.js runs)
+ */
+const IGNORED = [/^examples\/(bevy_editor|languages|mobile)\//, /^examples\/[^/]+$/];
 
 const HEADER = `# The files of Raven that raven-tsx was last checked against: blob, commit accepted at, path.
 # Written by bun run raven:drift --accept. See src/tools/raven-drift.ts.

@@ -4,6 +4,7 @@
  * stay one typed array, and a new render only sends what changed.
  */
 
+import { COLOR, colorOf } from "./color";
 import { RavenError } from "./errors";
 import type { DataValue, PlotDragLine, PlotNumbers, PlotSeries } from "./props";
 import * as r from "./raven";
@@ -34,16 +35,9 @@ const MARKERS: Readonly<Record<NonNullable<PlotSeries["Marker"]>, r.RPlotMarker>
 const AXES: Readonly<Record<NonNullable<PlotDragLine["Axis"]>, r.RPlotAxis>> = { X: r.R_PLOT_X, Y: r.R_PLOT_Y, X2: r.R_PLOT_X2, Y2: r.R_PLOT_Y2 };
 
 const NEW_SERIES: PlotSeries = {};
-const COLOR = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 const seriesOf = (data: PlotData): readonly PlotSeries[] => (data.get("Series") ?? []) as readonly PlotSeries[];
 const linesOf = (data: PlotData): readonly PlotDragLine[] => (data.get("DragLines") ?? []) as readonly PlotDragLine[];
-
-/** A color as the four numbers Raven takes for a series or a line. */
-function colorOf(color: string): [red: number, green: number, blue: number, alpha: number] {
-	const channel = (from: number): number => parseInt(color.slice(from, from + 2), 16) / 255;
-	return [channel(1), channel(3), channel(5), color.length > 7 ? channel(7) : 1];
-}
 
 /** Whether two lists of numbers hold the same values. NaN, a gap in a curve, is the same as NaN. */
 function sameNumbers(a: PlotNumbers | undefined, b: PlotNumbers | undefined): boolean {

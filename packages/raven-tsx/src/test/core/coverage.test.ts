@@ -56,15 +56,15 @@ const SETTINGS: Readonly<Record<string, string>> = {
 	Expander: "Title OnChanged",
 	Checkbox: "Text Style OnChanged",
 	Slider: "Min Max Step Orientation OnChanged",
-	TextInput: "Placeholder Password ReadOnly MaxLength OnChanged OnCommitted",
+	TextInput: "Placeholder Password ReadOnly MaxLength InputType ReturnKey OnChanged OnCommitted",
 	SpinBox: "Min Max Step Decimals OnChanged",
 	ComboBox: "Items OnChanged",
 	ListView: "Items OnChanged OnActivated",
-	MenuItem: "Text Shortcut Checkable Separator OnClicked",
+	MenuItem: "Text Shortcut ShortcutText Checkable Separator OnClicked",
 	TextEditor: "Language LineNumbers Wrap ReadOnly Placeholder TabSize TabSpaces Completion AutoPairs TextSize Zoomable Font Markdown OnChanged",
 	// (Directory and FileName: what is shown first. No event says the user went elsewhere, and setting them again reloads the folder)
 	FileBrowser: "Directory Mode Filter FileName DefaultExtension ShowHidden Multiple Controls Places",
-	DockArea: "Movable CloseHides Tearable",
+	DockArea: "Movable CloseHides Tearable FloatMode",
 	Island: "ExpandOnHover ExpandOnClick Attached Notch",
 	ColorPicker: "Previous Alpha Popup Compact Numbers Swatches OnChanged",
 	// (Playing: Space toggles it in C with no callback, so putting it back would fight the user)
@@ -76,6 +76,8 @@ const SETTINGS: Readonly<Record<string, string>> = {
 	TimePicker: "ShowSeconds MinuteStep OnChanged",
 	Rating: "Max AllowHalf ReadOnly StarSize OnChanged",
 	Pagination: "PageCount Siblings OnChanged",
+	// (Fit: the wheel sets the zoom and the fit becomes None, with no event; setting Fit again is the application asking for it)
+	PdfView: "Source Password Fit OnChanged",
 	// (XMin and XMax are where the view starts: the user moves it, OnViewChanged says so, and setting them again would take it back)
 	Plot: "Title Legend Crosshair MouseText Tooltips Grid XLabel XScale XMin XMax XFormat XLinearThreshold XGrid XInverted XLocked XVisible YLabel YScale Y2Label Y2Scale OnChanged",
 };

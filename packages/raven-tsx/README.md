@@ -115,7 +115,7 @@ The components, their props, events, windows, themes and tags are the same as wi
 
 ## Node.js
 
-The package also runs under Node.js, with React, on Linux and macOS. Raven's Node-API binding replaces bun:ffi there; it comes in the package of the platform, as the library does.
+The package also runs under Node.js, with React and Solid, on Linux, macOS and Windows. Raven's Node-API binding replaces bun:ffi there; it comes in the package of the platform, as the library does.
 
     npm install @decky.fx/raven-tsx react react-reconciler
 
@@ -131,12 +131,17 @@ function App() {
 await runApp(h(App), { Title: "Hello", Width: 480, Height: 240 });
 ```
 
-TSX works through any compiler that turns it into JavaScript for Node.js, as with React elsewhere. What is not there yet:
+TSX works through any compiler that turns it into JavaScript for Node.js, as with React elsewhere.
 
-- Windows: Raven's build leaves the addon of its Node.js binding out there.
-- Solid: its TSX is compiled by the plugin of this package, which is one for Bun.
-- `WebView`: Raven's Node.js binding has no `raven_web.h` yet. It says so when asked.
-- The types: they are the sources, TypeScript, and a few raw values have their types from `bun:ffi`. A project of Node.js type-checks with `@types/bun` among its development dependencies and `"moduleResolution": "bundler"`, as with tsx, esbuild or Vite. `"NodeNext"` needs declarations of their own, which are not made yet.
+Solid compiles its TSX itself: the register of the package does it under Node.js (24 or newer), as the preload does on Bun, and gives Solid's build for clients. The TypeScript of an application is then taken away by Node.js, so it must be erasable, as Node.js runs TypeScript:
+
+    npm install @decky.fx/raven-tsx solid-js
+    npm install -D babel-preset-solid @babel/core
+    node --import @decky.fx/raven-tsx/solid/register src/index.tsx
+
+The files are those of [Solid](#solid) on Bun, unchanged.
+
+For TypeScript the package has declarations of its own under Node.js (`"moduleResolution": "NodeNext"`), which need no types of Bun; resolved as a bundler (tsx, esbuild, Vite), the sources are the types, with `@types/bun`. What is not there yet: `WebView`, as Raven's Node.js binding has no `raven_web.h` yet. It says so when asked.
 
 ## How props work
 
@@ -168,6 +173,7 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | `TimePicker` | `OnChanged` | `"HH:MM:SS"` |
 | `Rating` | `OnChanged` | `number` |
 | `Pagination` | `OnChanged` | page, from 0 |
+| `PdfView` | `OnChanged` | page, from 1, as `Page` counts it |
 | `Breadcrumb` | `OnClicked` | index |
 | `TextEditor` | `OnChanged`, `OnCompletion` | its text, the start of the word |
 | `TextEditor` | `OnZoom` | `number` |
@@ -176,6 +182,7 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | `MenuItem` | `OnClicked` | whether it is checked now |
 | `Island` | `OnChanged` | `boolean` |
 | `Viewport`, `<Window>` | `OnResize` | width, height |
+| `<Window>` | `OnKeyboard` | whether the keyboard on the screen shows, its height (mobile) |
 | `FileBrowser` | `OnChanged`, `OnAccepted` | path |
 | `DockArea` | `OnChanged` | its layout, for `Layout` or `Rdock_area_load_layout` |
 | `TreeView`, `TileView`, `NodeGraph`, `BlockEditor` | `OnContext` | what was right clicked, x, y |
@@ -365,6 +372,13 @@ Long lists ask for their rows as they are shown, and a million rows cost nothing
 <ListView ItemCount={1_000_000} ItemText={(index) => `Row ${index}`} />
 <TileView ItemCount={200} ItemFill={(index, item) => { item.text = names[index]; }} />
 <Table Columns={["Name", "Age"]} RowCount={people.length} CellText={(row, column) => cell(people[row], column)} />
+```
+
+The color of the text of a row or a cell is asked for in the same way, as they are drawn, stored items or not: `#RRGGBB` or `#RRGGBBAA`, or nothing for the theme's. It runs while the frame is drawn, so it reads state and changes none.
+
+```tsx
+<ListView Items={files} ItemColor={(index) => (files[index]?.endsWith(".tmp") ? "#888888" : null)} />
+<Table Columns={["Name", "Balance"]} RowCount={rows.length} CellText={text} CellColor={(row, column) => (column === 1 && rows[row].balance < 0 ? "#D33A2C" : null)} />
 ```
 
 A `NodeGraph` and a `Timeline` take one of Raven's looks, `Preset` "Auto" (the theme), "Modern", "Blueprint", "Blender" or "Neon", and their parts can be changed one by one: `LinkShape`, `PinShape`, `HeaderStyle`, `ClipStyle`, `KeyShape`, `PlayheadColor`... One type of pin, one node or one track takes its own with `Rnode_graph_set_type_style`, `Rnode_graph_set_node_style` and `Rtimeline_set_track_style`.

@@ -103,6 +103,9 @@ interface ControlledValue {
 	readonly unreported?: true | undefined;
 }
 
+/** The props whose function Raven calls as the widget is drawn: a new one needs the widget drawn again. */
+const ASKED_WHILE_DRAWN: readonly string[] = ["OnPaint", "ItemColor", "CellColor"];
+
 const numberText = (value: number): string => String(value);
 const twoDigits = (value: number): string => String(value).padStart(2, "0");
 
@@ -137,6 +140,14 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	],
 	Rating: [{ attribute: "Value", read: (widget) => numberText(r.Rrating_get_value(widget)) }],
 	Pagination: [{ attribute: "Page", read: (widget) => numberText(r.Rpagination_get_page(widget)) }],
+	PdfView: [
+		// (counted from 1, as the attribute is written; C counts from 0. Without a document, a page asked
+		// for waits for one and C says 0 meanwhile: nothing to compare, so each change of Page is set)
+		{ attribute: "Page", read: (widget) => (r.Rpdf_view_get_page_count(widget) > 0 ? numberText(r.Rpdf_view_get_page(widget) + 1) : "") },
+		// (while a fit sizes the pages, the zoom is the fit's: setting Zoom also ends the fit, so it is set
+		// even when the numbers are the same)
+		{ attribute: "Zoom", read: (widget) => (r.Rpdf_view_get_fit(widget) === r.R_PDF_FIT_NONE ? numberText(r.Rpdf_view_get_zoom(widget)) : ""), unreported: true },
+	],
 	DatePicker: [{
 		attribute: "Date",
 		read: (widget) => {
@@ -695,7 +706,8 @@ export class WidgetInstance implements HostNode {
 		this.applyData(previous.data, next);
 		applyHandlers(this.tag, this.id, previous.handlers, next.handlers);
 		this.applyVirtualItems(previous, next);
-		if (next.handlers.get("OnPaint") !== previous.handlers.get("OnPaint")) {
+		// (what is asked for as the widget is drawn shows a new function at the next frame drawn: one now)
+		if (ASKED_WHILE_DRAWN.some((name) => next.handlers.get(name) !== previous.handlers.get(name))) {
 			r.Rwidget_invalidate(this.id);
 		}
 		this.resolved = next;

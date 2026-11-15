@@ -115,7 +115,7 @@ const react = [
 	'import type { WindowInstance } from "../core/window-instance";',
 	"",
 	"/** The props every component has from React. */",
-	"interface ReactProps<R> {",
+	"export interface ReactProps<R> {",
 	"\treadonly key?: Key;",
 	"\treadonly ref?: Ref<R>;",
 	"\treadonly children?: ReactNode;",
@@ -154,7 +154,7 @@ for (let index = 0; index < r.Rxml_get_tag_count(); index++) {
 			`export interface WindowOptions { ${propsOf(name)} }`,
 			"",
 			"/** The props of `<Window>`: its attributes, and what it tells the application. */",
-			"export type WindowProps = WindowOptions & { readonly OnClose?: () => void; readonly OnResize?: (width: number, height: number) => void; readonly OnDrop?: (event: RDropEvent) => boolean | void };",
+			"export type WindowProps = WindowOptions & { readonly OnClose?: () => void; readonly OnResize?: (width: number, height: number) => void; readonly OnDrop?: (event: RDropEvent) => boolean | void; readonly OnKeyboard?: (visible: boolean, height: number) => void };",
 		);
 		react.push(
 			"/**",

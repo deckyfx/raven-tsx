@@ -1,13 +1,13 @@
 /** The events, props and tree rules added after the first ones, on real widgets, with real input where it can be injected. */
 
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { ptr, type Pointer } from "bun:ffi";
 import { tmpdir } from "node:os";
 import { createContext, createRef, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import * as r from "../../core/raven";
 import { eventStats } from "../../core/events";
 import {
-	BlockEditor, Button, ColorPicker, createPortal, createWindow, Custom, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, Menu, MenuBar, MenuItem, NodeGraph, raven, RavenRoot, registerWebView, Separator, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
+	BlockEditor, Button, ColorPicker, createPortal, createWindow, Custom, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
 	type WidgetInstance, type WindowInstance,
 } from "../../react/index";
 
@@ -1098,3 +1098,124 @@ export const refusedByTheTypes = (): readonly ReactNode[] => [
 	// @ts-expect-error as for a ListView
 	<TileView OnChanged="save" />,
 ];
+
+test("a ListView and a Table ask for the color of what they draw, and one that is not a color is the theme's", async () => {
+	const rows: number[] = [];
+	const cells: string[] = [];
+	const logged: string[] = [];
+	const error = console.error;
+	console.error = (...values: unknown[]): void => void logged.push(values.map(String).join(" "));
+	function Lists({ colored }: { colored: boolean }): ReactNode {
+		const itemColor = (index: number): string | null => {
+			rows.push(index);
+			return index === 0 ? "#ff000080" : index === 1 ? "red" : null;
+		};
+		const cellColor = (row: number, column: number): string => {
+			cells.push(`${row}:${column}`);
+			return "#00FF00";
+		};
+		return (
+			<VBox>
+				<ListView Name="list" Height={100} Items={["a", "b", "c"]} ItemColor={colored ? itemColor : undefined} />
+				<Table Name="table" Height={100} Columns={["A", "B"]} RowCount={2} CellText={(row, column) => `${row}:${column}`} CellColor={colored ? cellColor : undefined} />
+			</VBox>
+		);
+	}
+	try {
+		await mount(<Lists colored />);
+		expect(new Set(rows)).toEqual(new Set([0, 1, 2]));
+		expect(new Set(cells)).toEqual(new Set(["0:0", "0:1", "1:0", "1:1"]));
+		expect(logged.some((line) => line.includes('not "red"'))).toBe(true);
+		const colored = eventStats().handlers;
+		root?.render(<Lists colored={false} />);
+		await settle();
+		expect(eventStats().handlers).toBe(colored - 2);
+		rows.length = 0;
+		cells.length = 0;
+		r.Rwidget_invalidate(find("list"));
+		r.Rwidget_invalidate(find("table"));
+		await settle();
+		expect(rows).toEqual([]);
+		expect(cells).toEqual([]);
+	} finally {
+		console.error = error;
+	}
+});
+
+test("a new color function of a ListView or a Table is asked for at once, with nothing else changed", async () => {
+	const asked: string[] = [];
+	// (the same function at each render: only the color changes)
+	const cellText = (): string => "x";
+	function Lists({ shade }: { shade: string }): ReactNode {
+		return (
+			<VBox>
+				<ListView Name="list" Height={100} Items={["a", "b"]} ItemColor={() => void asked.push(`row ${shade}`)} />
+				<Table Name="table" Height={100} Columns={["A"]} RowCount={1} CellText={cellText} CellColor={() => void asked.push(`cell ${shade}`)} />
+			</VBox>
+		);
+	}
+	await mount(<Lists shade="first" />);
+	expect(asked).toContain("row first");
+	expect(asked).toContain("cell first");
+	asked.length = 0;
+	// (no frame draws them again by itself)
+	await settle();
+	expect(asked).toEqual([]);
+	root?.render(<Lists shade="second" />);
+	await settle();
+	expect(asked).toContain("row second");
+	expect(asked).toContain("cell second");
+	expect(asked.filter((item) => item.endsWith("first"))).toEqual([]);
+});
+
+test("a PdfView sets each Page asked for before a document, and Zoom whatever the fit made of it", async () => {
+	const set: string[] = [];
+	const setAttribute = r.Rwidget_set_attribute;
+	const spy = spyOn(r, "Rwidget_set_attribute").mockImplementation((widget, name, value) => {
+		if (name === "Page" || name === "Zoom") {
+			set.push(`${name}=${value}`);
+		}
+		return setAttribute(widget, name, value);
+	});
+	try {
+		function Reader({ page, zoom }: { page: number; zoom?: number }): ReactNode {
+			return <VBox><PdfView Name="pdf" Height={120} Page={page} Zoom={zoom} /></VBox>;
+		}
+		await mount(<Reader page={3} />);
+		root?.render(<Reader page={1} />);
+		await settle();
+		// (no document: C keeps the page for the one to come, and says 0 meanwhile)
+		expect(set).toEqual(["Page=3", "Page=1"]);
+		const pdf = find("pdf");
+		expect(r.Rpdf_view_get_fit(pdf)).not.toBe(r.R_PDF_FIT_NONE);
+		const zoom = r.Rpdf_view_get_zoom(pdf);
+		root?.render(<Reader page={1} zoom={zoom} />);
+		await settle();
+		expect(set.at(-1)).toBe(`Zoom=${zoom}`);
+		expect(r.Rpdf_view_get_fit(pdf)).toBe(r.R_PDF_FIT_NONE);
+		set.length = 0;
+		root?.render(<Reader page={1} zoom={zoom} />);
+		await settle();
+		expect(set).toEqual([]);
+	} finally {
+		spy.mockRestore();
+	}
+});
+
+test("a PdfView says when its page changes, and a Window when the keyboard on the screen does", async () => {
+	function Reader({ listening }: { listening: boolean }): ReactNode {
+		return (
+			<Window Width={200} Height={160} OnKeyboard={listening ? () => {} : undefined}>
+				<PdfView Name="pdf" Height={120} Fit="Width" Page={1} OnChanged={listening ? () => {} : undefined} />
+			</Window>
+		);
+	}
+	const windows = new RavenRoot();
+	windows.render(<Reader listening />);
+	await settle();
+	const listening = eventStats().handlers;
+	windows.render(<Reader listening={false} />);
+	await settle();
+	expect(eventStats().handlers).toBe(listening - 2);
+	windows.unmount();
+});
