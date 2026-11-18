@@ -80,7 +80,8 @@ test("the application's folder is that of its entry when the runtime gives one t
 	expect(applicationFolder("src/index.ts", "/somewhere")).toBe("/somewhere");
 	expect(applicationFolder(`${import.meta.dir}/no-such-entry.ts`, "/somewhere")).toBe("/somewhere");
 	// (a folder, as `node apps/web` gives: that of the main file it runs, else the folder itself)
-	const app = mkdtempSync(join(tmpdir(), "raven-tsx-entry-"));
+	// (its real path: on macOS the temporary folder is under /var, a link to /private/var)
+	const app = realpathSync.native(mkdtempSync(join(tmpdir(), "raven-tsx-entry-")));
 	try {
 		writeFileSync(join(app, "package.json"), JSON.stringify({ name: "app", main: "dist/index.cjs" }));
 		mkdirSync(join(app, "dist"));
@@ -108,6 +109,14 @@ test.skipIf(!canLink())("an entry that is a link counts where it leads, unless t
 		symlinkSync(join(root, "real"), join(root, "app-link"), "dir");
 		expect(applicationFolder(join(root, "app-link"), "/somewhere")).toBe(join(root, "real", "dist"));
 		expect(applicationFolder(join(root, "app-link"), "/somewhere", true)).toBe(join(root, "app-link", "dist"));
+		// (a main file that is itself a link, kept: its folder in the application, not where it leads)
+		mkdirSync(join(root, "shared"));
+		writeFileSync(join(root, "shared", "start.cjs"), "");
+		mkdirSync(join(root, "app2", "dist"), { recursive: true });
+		writeFileSync(join(root, "app2", "package.json"), JSON.stringify({ name: "app2", main: "dist/start.cjs" }));
+		symlinkSync(join(root, "shared", "start.cjs"), join(root, "app2", "dist", "start.cjs"));
+		expect(applicationFolder(join(root, "app2"), "/somewhere", true)).toBe(join(root, "app2", "dist"));
+		expect(applicationFolder(join(root, "app2"), "/somewhere")).toBe(join(root, "shared"));
 		// (an entry that cannot be looked at, a loop of links: the working directory)
 		symlinkSync(join(root, "loop"), join(root, "loop"));
 		expect(applicationFolder(join(root, "loop"), "/somewhere")).toBe("/somewhere");
@@ -148,5 +157,10 @@ test("NODE_OPTIONS is split into words as Node.js splits it", () => {
 	expect(nodeOptionsWords("  --a   --b=1 ")).toEqual(["--a", "--b=1"]);
 	expect(nodeOptionsWords('--require "./with space.cjs" --c')).toEqual(["--require", "./with space.cjs", "--c"]);
 	expect(nodeOptionsWords('--title "say \\"hi\\""')).toEqual(["--title", 'say "hi"']);
-	expect(nodeOptionsWords('--empty ""')).toEqual(["--empty", ""]);
+	// (quotes only open and close: an empty pair makes no word, and a quoted part joins its neighbours)
+	expect(nodeOptionsWords('--empty ""')).toEqual(["--empty"]);
+	expect(nodeOptionsWords('--a="b c"d')).toEqual(["--a=b cd"]);
+	// (only a space separates: a tab is part of the word)
+	expect(nodeOptionsWords("--title=demo\t--preserve-symlinks-main")).toEqual(["--title=demo\t--preserve-symlinks-main"]);
+	expect(preservesSymlinksMain([], "--title=demo\t--preserve-symlinks-main")).toBe(false);
 });

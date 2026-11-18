@@ -151,6 +151,13 @@ export function applicationFolder(entry: string | undefined, cwd: string, preser
 		// (a folder runs its main file, which may be deeper and see other packages: `dist/index.cjs`;
 		// found through the link when the runtime keeps it)
 		try {
+			if (preserveSymlinks) {
+				// (as written in the folder's package.json, links kept, the main file one too)
+				const written = logicalMain(entry);
+				if (written) {
+					return dirname(written);
+				}
+			}
 			const main = createRequire(join(entry, "index.js")).resolve(entry);
 			return dirname(preserveSymlinks ? join(entry, relative(realpathSync(entry), main)) : main);
 		} catch {
@@ -162,6 +169,23 @@ export function applicationFolder(entry: string | undefined, cwd: string, preser
 	}
 }
 
+/**
+ * The main file of a folder as its package.json names it, under the folder's own path (links kept),
+ * when that file is there: `main`, or with `.js` or `.cjs` added, as Node.js tries them.
+ */
+function logicalMain(folder: string): string | undefined {
+	let main: unknown;
+	try {
+		main = (JSON.parse(readFileSync(join(folder, "package.json"), "utf8")) as { readonly main?: unknown }).main;
+	} catch {
+		return undefined;
+	}
+	if (typeof main !== "string" || main === "") {
+		return undefined;
+	}
+	return [join(folder, main), join(folder, `${main}.js`), join(folder, `${main}.cjs`)].find((path) => statSync(path, { throwIfNoEntry: false })?.isFile());
+}
+
 /** Whether Node.js keeps the link of its main file: `--preserve-symlinks-main` on its command line or in NODE_OPTIONS. */
 export function preservesSymlinksMain(execArgv: readonly string[], nodeOptions: string | undefined): boolean {
 	const flag = "--preserve-symlinks-main";
@@ -169,31 +193,31 @@ export function preservesSymlinksMain(execArgv: readonly string[], nodeOptions: 
 }
 
 /**
- * The words of NODE_OPTIONS as Node.js reads them: split at white space, but a value in double
- * quotes is one word, in which a backslash keeps the character after it.
+ * The words of NODE_OPTIONS as Node.js reads them (`ParseNodeOptionsEnvVar`): split at spaces (only
+ * ' '), outside double quotes, which only open and close a quoted part, and in which a backslash
+ * keeps the character after it.
  */
 export function nodeOptionsWords(options: string): string[] {
 	const words: string[] = [];
-	let word: string | undefined;
 	let quoted = false;
+	let newWord = true;
 	for (let index = 0; index < options.length; index++) {
-		const character = options.charAt(index);
-		if (quoted && character === "\\" && index + 1 < options.length) {
-			word = (word ?? "") + options.charAt(++index);
+		let character = options.charAt(index);
+		if (character === "\\" && quoted && index + 1 < options.length) {
+			character = options.charAt(++index);
+		} else if (character === " " && !quoted) {
+			newWord = true;
+			continue;
 		} else if (character === '"') {
 			quoted = !quoted;
-			word ??= "";
-		} else if (!quoted && /\s/.test(character)) {
-			if (word !== undefined) {
-				words.push(word);
-				word = undefined;
-			}
-		} else {
-			word = (word ?? "") + character;
+			continue;
 		}
-	}
-	if (word !== undefined) {
-		words.push(word);
+		if (newWord) {
+			words.push(character);
+			newWord = false;
+		} else {
+			words[words.length - 1] += character;
+		}
 	}
 	return words;
 }
