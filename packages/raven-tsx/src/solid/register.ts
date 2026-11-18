@@ -12,15 +12,16 @@
  *   servers, which does not react.
  */
 
-import babel from "@babel/core";
-import solid from "babel-preset-solid";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
-import { assertSolidVersion, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+import { assertSolidVersion, installedVersion, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
-// (before the application imports Solid: a Solid 2 would fail there without saying why)
-assertSolidVersion();
+// (before the compiler is loaded and the application imports Solid: a Solid 2 would fail there
+// without saying why, as would a Solid 2 with no compiler installed yet)
+assertSolidVersion({ solid: installedVersion("solid-js"), preset: installedVersion("babel-preset-solid") });
+
+const [{ default: babel }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);
 
 /** Whether a specifier is of solid-js, which must be its build for clients. */
 const isSolid = (specifier: string): boolean => specifier === "solid-js" || specifier.startsWith("solid-js/");

@@ -33,5 +33,16 @@ test("the installed versions are those this package finds", () => {
 	expect(installedVersion("solid-js")).toBe(manifest.devDependencies["solid-js"]);
 	expect(installedVersion("babel-preset-solid")).toBe(manifest.devDependencies["babel-preset-solid"]);
 	expect(installedVersion("no-such-package-of-raven-tsx")).toBeUndefined();
-	expect(() => assertSolidVersion()).not.toThrow();
+});
+
+test("a version is found where it is asked to be resolved, as the plugin does from a source's folder", () => {
+	const from = (folder: string) => (name: string) => Bun.resolveSync(name, folder);
+	expect(installedVersion("solid-js", from(import.meta.dir))).toBe(manifest.devDependencies["solid-js"]);
+	// (a folder with no node_modules above it has none)
+	expect(installedVersion("solid-js", from("/"))).toBeUndefined();
+});
+
+test("the check throws the problem, and passes Solid 1", () => {
+	expect(() => assertSolidVersion({ solid: installedVersion("solid-js"), preset: installedVersion("babel-preset-solid") })).not.toThrow();
+	expect(() => assertSolidVersion({ solid: "2.0.1" })).toThrow("supports Solid 1, not solid-js 2.0.1.");
 });

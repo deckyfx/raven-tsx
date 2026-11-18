@@ -43,14 +43,17 @@ export function solidVersionProblem(versions: SolidVersions): string | undefined
 	);
 }
 
+/** Where a package's entry point is: from this package by default, the copy its renderer and loaders import. */
+const fromHere = (name: string): string => fileURLToPath(import.meta.resolve(name));
+
 /**
- * The version of a package as this package finds it (the copy its renderer and loaders import), or
- * nothing when it is not installed.
+ * The version of a package, found where `resolveEntry` resolves its entry point (from this package by
+ * default), or nothing when it is not installed there.
  */
-export function installedVersion(name: string): string | undefined {
+export function installedVersion(name: string, resolveEntry: (name: string) => string = fromHere): string | undefined {
 	let path: string;
 	try {
-		path = fileURLToPath(import.meta.resolve(name));
+		path = resolveEntry(name);
 	} catch {
 		return undefined;
 	}
@@ -68,9 +71,9 @@ export function installedVersion(name: string): string | undefined {
 	return undefined;
 }
 
-/** Stops, saying why, when the application has a Solid this package is not written for. */
-export function assertSolidVersion(): void {
-	const problem = solidVersionProblem({ solid: installedVersion("solid-js"), preset: installedVersion("babel-preset-solid") });
+/** Stops, saying why, when these versions of Solid are not those this package is written for. */
+export function assertSolidVersion(versions: SolidVersions): void {
+	const problem = solidVersionProblem(versions);
 	if (problem) {
 		throw new Error(problem);
 	}

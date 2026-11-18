@@ -44,12 +44,16 @@ async function run(command: readonly string[], cwd: string): Promise<string> {
 	return output;
 }
 
-/** Runs a command that must fail and say this; throws if it succeeds or says something else. */
-async function refused(command: readonly string[], cwd: string, says: string): Promise<void> {
+/**
+ * Runs a command that must fail saying `says`, before its application starts: throws if it succeeds,
+ * says something else, or prints `started` (the application ran, and failed later on its own).
+ */
+async function refused(command: readonly string[], cwd: string, says: string, started: string): Promise<void> {
 	const child = Bun.spawn([...command], { cwd, stdout: "pipe", stderr: "pipe" });
 	const [output, errors, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
-	if (code === 0 || !`${output}${errors}`.includes(says)) {
-		throw new CommandFailed(`check:consumer: ${command.join(" ")} in ${cwd} should fail saying "${says}", and exited with ${code}:\n${output}${errors}`);
+	const printed = `${output}${errors}`;
+	if (code === 0 || !printed.includes(says) || printed.includes(started)) {
+		throw new CommandFailed(`check:consumer: ${command.join(" ")} in ${cwd} should stop before the application starts, saying "${says}", and exited with ${code}:\n${printed}`);
 	}
 }
 
@@ -205,6 +209,7 @@ try {
 	// application must stop at the preload and say why, not fail at its first import of Solid)
 	const solid2 = `${work}/solid2`;
 	const solid2Says = "@decky.fx/raven-tsx/solid supports Solid 1, not solid-js 2.";
+	const solid2Started = "consumer-solid2: the application started";
 	await Bun.write(`${solid2}/package.json`, JSON.stringify({
 		name: "consumer-solid2",
 		private: true,
@@ -214,9 +219,11 @@ try {
 		overrides: { [nativeName]: `file:${native}` },
 	}, null, 2));
 	await Bun.write(`${solid2}/bunfig.toml`, `preload = ["${manifest.name}/solid/preload"]\n`);
-	await Bun.write(`${solid2}/src/index.tsx`, `import { Label } from "${manifest.name}/solid";\nconsole.log(<Label>never</Label>);\n`);
+	// (it says it started, then imports the renderer, which a Solid 2 makes fail on its own: the check
+	// must stop it before, so the message is never printed)
+	await Bun.write(`${solid2}/src/index.tsx`, `console.log("${solid2Started}");\nawait import("${manifest.name}/solid");\n`);
 	await run(["bun", "install"], solid2);
-	await refused(["bun", "run", "src/index.tsx"], solid2, solid2Says);
+	await refused(["bun", "run", "src/index.tsx"], solid2, solid2Says, solid2Started);
 	console.log("with Solid 2 installed, the preload stops and says to install Solid 1");
 
 	if (existsSync(`${platform}/raven_napi.node`)) {
@@ -312,7 +319,7 @@ try {
 		console.log(`installed by npm, Solid runs under Node.js through its register, and a signal reaches its widget: Raven ${signalled.trim()}`);
 
 		// (the application with Solid 2, run by Node.js: the register stops it as the preload does)
-		await refused(["node", "--import", `${manifest.name}/solid/register`, "src/index.tsx"], solid2, solid2Says);
+		await refused(["node", "--import", `${manifest.name}/solid/register`, "src/index.tsx"], solid2, solid2Says, solid2Started);
 		console.log("with Solid 2 installed, the register of Node.js stops too and says to install Solid 1");
 	} else {
 		console.log(`${nativeName} has no addon of the Node.js binding: nothing runs under Node.js here`);

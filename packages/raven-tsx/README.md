@@ -70,9 +70,9 @@ An application of Solid builds with `Bun.build` and the plugin, as [examples/sol
 ## Solid
 
     bun add @decky.fx/raven-tsx solid-js@1
-    bun add -d babel-preset-solid@1 @babel/core
+    bun add -d babel-preset-solid@1 @babel/core@7
 
-The package is written for Solid 1 (1.9). Solid 2 moved its renderer and changed its compiler, and npm now gives it by default, so the `@1` matters: with Solid 2, the preload stops and says so. Solid 2 comes in a later version.
+The package is written for Solid 1 (1.9), whose compiler runs on Babel 7. npm now gives Solid 2 and Babel 8 by default, so the versions matter: Solid 2 moved its renderer and changed its compiler, and with it the preload stops and says so; npm refuses `babel-preset-solid@1` next to Babel 8. Solid 2 comes in a later version.
 
 Solid compiles its JSX itself, with Babel, to calls of a renderer: Bun alone would compile it for React. The plugin of the package does that, and gives Solid's build for clients, as on Bun `solid-js` would otherwise be its build for servers, which does not react. Preload it, for `bun run` and `bun test`:
 
@@ -138,7 +138,7 @@ TSX works through any compiler that turns it into JavaScript for Node.js, as wit
 Solid compiles its TSX itself: the register of the package does it under Node.js (24 or newer), as the preload does on Bun, and gives Solid's build for clients. The TypeScript of an application is then taken away by Node.js, so it must be erasable, as Node.js runs TypeScript:
 
     npm install @decky.fx/raven-tsx solid-js@1
-    npm install -D babel-preset-solid@1 @babel/core
+    npm install -D babel-preset-solid@1 @babel/core@7
     node --import @decky.fx/raven-tsx/solid/register src/index.tsx
 
 The files are those of [Solid](#solid) on Bun, unchanged.

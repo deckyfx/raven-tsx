@@ -11,8 +11,8 @@
 
 import type { BunPlugin } from "bun";
 import { readFileSync } from "node:fs";
-import { resolve, sep } from "node:path";
-import { assertSolidVersion, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+import { dirname, resolve, sep } from "node:path";
+import { assertSolidVersion, installedVersion, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
 export interface SolidPluginOptions {
@@ -73,8 +73,18 @@ const solidRoot = (path: string): string => path.slice(0, path.lastIndexOf(`${se
 /** The plugin: compiles TSX for Solid, and takes Solid's build for clients. */
 export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 	const development = options.development ?? false;
-	// (before the application imports Solid: a Solid 2 would fail there without saying why)
-	assertSolidVersion();
+	// (the compiler is the one the plugin loads, from where it is installed)
+	assertSolidVersion({ preset: installedVersion("babel-preset-solid") });
+	// (the Solid of what is compiled, from the folder of each source: that of the application, which
+	// a build may hold in another installation than the plugin's)
+	const checkedFolders = new Set<string>();
+	const assertSolidOf = (path: string): void => {
+		const folder = dirname(path);
+		if (!checkedFolders.has(folder)) {
+			assertSolidVersion({ solid: installedVersion("solid-js", (name) => Bun.resolveSync(name, folder)) });
+			checkedFolders.add(folder);
+		}
+	};
 	return {
 		name: "raven-tsx-solid",
 		setup(build) {
@@ -84,6 +94,8 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 				return { contents: readFileSync(client ?? path, "utf8"), loader: "js" };
 			});
 			build.onLoad({ filter: options.filter ?? SOURCES }, async ({ path }) => {
+				// (before the source runs and imports Solid: a Solid 2 would fail there without saying why)
+				assertSolidOf(path);
 				// (loaded here, so that an application of React never needs Babel)
 				const [{ transformAsync }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);
 				// (the types stay, for Bun to take away: Babel only compiles the JSX)
