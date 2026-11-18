@@ -7,8 +7,8 @@
  */
 
 import type { PluginItem, TransformOptions } from "@babel/core";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The major version of Solid this package is written for: its renderer, its compiler. */
@@ -38,8 +38,8 @@ export function solidVersionProblem(versions: SolidVersions): string | undefined
 	const found = wrong.map(([name, version]) => `${name} ${version}`).join(" and ");
 	return (
 		`raven-tsx: @decky.fx/raven-tsx/solid supports Solid ${SOLID_MAJOR}, not ${found}. ` +
-		`Install Solid ${SOLID_MAJOR}: npm install solid-js@${SOLID_MAJOR} && npm install -D babel-preset-solid@${SOLID_MAJOR} ` +
-		`(bun add solid-js@${SOLID_MAJOR} && bun add -d babel-preset-solid@${SOLID_MAJOR}). Solid 2 comes in a later version of raven-tsx.`
+		`Install Solid ${SOLID_MAJOR}: npm install solid-js@${SOLID_MAJOR} && npm install -D babel-preset-solid@${SOLID_MAJOR} @babel/core@7 ` +
+		`(bun add solid-js@${SOLID_MAJOR} && bun add -d babel-preset-solid@${SOLID_MAJOR} @babel/core@7). Solid 2 comes in a later version of raven-tsx.`
 	);
 }
 
@@ -71,6 +71,18 @@ export function installedVersion(name: string, resolveEntry: (name: string) => s
 	return undefined;
 }
 
+/** What compiled TSX imports: the renderer of this package (see `solidBabelOptions`). */
+export const RENDERER = "@decky.fx/raven-tsx/solid/renderer";
+
+/**
+ * The folder an application's packages are resolved from: that of its entry file when the runtime
+ * gives one that exists (`Bun.main`, `process.argv[1]`), else the working directory. Run from the
+ * root of a workspace, the entry's folder may see another solid-js than the root.
+ */
+export function applicationFolder(entry: string | undefined, cwd: string): string {
+	return entry && isAbsolute(entry) && existsSync(entry) ? dirname(entry) : cwd;
+}
+
 /** Stops, saying why, when these versions of Solid are not those this package is written for. */
 export function assertSolidVersion(versions: SolidVersions): void {
 	const problem = solidVersionProblem(versions);
@@ -94,6 +106,6 @@ export function solidBabelOptions(path: string, solid: PluginItem): TransformOpt
 		// (an error says the line of the source: the runtimes do not read Babel's source maps)
 		retainLines: true,
 		parserOpts: { plugins: isTypeScript(path) ? ["jsx", "typescript"] : ["jsx"] },
-		presets: [[solid, { generate: "universal", moduleName: "@decky.fx/raven-tsx/solid/renderer" }]],
+		presets: [[solid, { generate: "universal", moduleName: RENDERER }]],
 	};
 }

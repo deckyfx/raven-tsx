@@ -1,7 +1,8 @@
 /** The Solid that an application has: the package is written for Solid 1, and says so of a Solid 2. */
 
 import { expect, test } from "bun:test";
-import { assertSolidVersion, installedVersion, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
+import { dirname } from "node:path";
+import { applicationFolder, assertSolidVersion, installedVersion, RENDERER, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
 import manifest from "../../../package.json";
 
 test("Solid 1 is what the package is written for", () => {
@@ -22,6 +23,9 @@ test("a Solid 2 is named, with what to install instead", () => {
 	expect(problem).not.toContain("babel-preset-solid 1.9.19");
 	expect(problem).toContain("npm install solid-js@1 && npm install -D babel-preset-solid@1");
 	expect(problem).toContain("bun add solid-js@1 && bun add -d babel-preset-solid@1");
+	// (Babel 7 too: npm's latest is Babel 8, which babel-preset-solid 1 does not take)
+	expect(problem).toContain("npm install -D babel-preset-solid@1 @babel/core@7");
+	expect(problem).toContain("bun add -d babel-preset-solid@1 @babel/core@7");
 });
 
 test("the compiler of Solid 2 is named too, alone or with Solid 2", () => {
@@ -47,4 +51,19 @@ test("a version is found where it is asked to be resolved, as the plugin does fr
 test("the check throws the problem, and passes Solid 1", () => {
 	expect(() => assertSolidVersion({ solid: installedVersion("solid-js"), preset: installedVersion("babel-preset-solid") })).not.toThrow();
 	expect(() => assertSolidVersion({ solid: "2.0.1" })).toThrow("supports Solid 1, not solid-js 2.0.1.");
+});
+
+test("the application's folder is that of its entry when the runtime gives one that exists", () => {
+	expect(applicationFolder(import.meta.path, "/somewhere")).toBe(import.meta.dir);
+	// (none, a relative path, or a file that is not there: the working directory)
+	expect(applicationFolder(undefined, "/somewhere")).toBe("/somewhere");
+	expect(applicationFolder("src/index.ts", "/somewhere")).toBe("/somewhere");
+	expect(applicationFolder(`${import.meta.dir}/no-such-entry.ts`, "/somewhere")).toBe("/somewhere");
+});
+
+test("the renderer's solid-js is found from a source's folder, as the plugin checks it", () => {
+	const rendererSolid = (folder: string) => installedVersion("solid-js", (name) => Bun.resolveSync(name, dirname(Bun.resolveSync(RENDERER, folder))));
+	expect(rendererSolid(import.meta.dir)).toBe(manifest.devDependencies["solid-js"]);
+	// (a folder where the renderer cannot be found: nothing to check)
+	expect(installedVersion("solid-js", () => Bun.resolveSync("@decky.fx/no-such-renderer", import.meta.dir))).toBeUndefined();
 });
