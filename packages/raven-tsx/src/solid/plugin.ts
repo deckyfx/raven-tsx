@@ -12,7 +12,7 @@
 import type { BunPlugin } from "bun";
 import { readFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
-import { assertSolidVersion, installedPackage, isExternal, isTypeScript, RENDERER, solidBabelOptions, SOURCES } from "./compile";
+import { assertSolidVersion, installedPackage, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
 export interface SolidPluginOptions {
@@ -70,6 +70,9 @@ function clientFilesOf(root: string, development: boolean): ReadonlyMap<string, 
 /** The folder of the solid-js package a file of it is in. */
 const solidRoot = (path: string): string => path.slice(0, path.lastIndexOf(`${sep}solid-js${sep}`) + `${sep}solid-js`.length);
 
+/** The renderer of this package, as a file: what compiled TSX imports (`RENDERER` in `./compile`). */
+const RENDERER_FILE = /[\\/]raven-tsx[\\/](?:.*[\\/])?solid[\\/]renderer\.[cm]?[jt]s$/;
+
 /** The plugin: compiles TSX for Solid, and takes Solid's build for clients. */
 export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 	const development = options.development ?? false;
@@ -82,19 +85,19 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 			// which a build may hold in another installation than the plugin's; looked up again by each
 			// build, as Solid may have changed between two)
 			const checkedFolders = new Set<string>();
-			const assertSolidOf = (path: string): void => {
-				const folder = dirname(path);
+			const assertSolidFrom = (folder: string): void => {
 				if (!checkedFolders.has(folder)) {
 					assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, folder), folder) });
-					// (and the solid-js of the renderer this source's compiled TSX imports, which may be another
-					// copy; unless the build leaves the renderer out, for where it runs to resolve. The preload's
-					// plugin has no build configuration)
-					if (!isExternal(RENDERER, build.config?.external)) {
-						assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, dirname(Bun.resolveSync(RENDERER, folder))), folder) });
-					}
 					checkedFolders.add(folder);
 				}
 			};
+			// (the renderer of this package, when it is loaded: its own solid-js, which may be another copy
+			// than the sources'. A renderer the build leaves out, however it does, is never loaded here, and
+			// the place it runs in resolves it)
+			build.onLoad({ filter: RENDERER_FILE }, ({ path }) => {
+				assertSolidFrom(dirname(path));
+				return { contents: readFileSync(path, "utf8"), loader: /\.[cm]?ts$/.test(path) ? "ts" : "js" };
+			});
 			// (Bun runs no onResolve of a plugin for a package: the server's file is read as the client's)
 			build.onLoad({ filter: /[\\/]solid-js[\\/].*server\.c?js$/ }, ({ path }) => {
 				const client = clientFilesOf(solidRoot(path), development).get(path);
@@ -102,7 +105,7 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 			});
 			build.onLoad({ filter: options.filter ?? SOURCES }, async ({ path }) => {
 				// (before the source runs and imports Solid: a Solid 2 would fail there without saying why)
-				assertSolidOf(path);
+				assertSolidFrom(dirname(path));
 				// (loaded here, so that an application of React never needs Babel)
 				const [{ transformAsync }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);
 				// (the types stay, for Bun to take away: Babel only compiles the JSX)

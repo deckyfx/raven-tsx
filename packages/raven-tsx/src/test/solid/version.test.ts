@@ -1,7 +1,10 @@
 /** The Solid that an application has: the package is written for Solid 1, and says so of a Solid 2. */
 
 import { expect, test } from "bun:test";
-import { applicationFolder, assertSolidVersion, installedPackage, installedVersion, isExternal, RENDERER, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { applicationFolder, assertSolidVersion, installedPackage, installedVersion, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
 import manifest from "../../../package.json";
 
 test("Solid 1 is what the package is written for", () => {
@@ -62,19 +65,20 @@ test("the application's folder is that of its entry when the runtime gives one t
 	expect(applicationFolder(undefined, "/somewhere")).toBe("/somewhere");
 	expect(applicationFolder("src/index.ts", "/somewhere")).toBe("/somewhere");
 	expect(applicationFolder(`${import.meta.dir}/no-such-entry.ts`, "/somewhere")).toBe("/somewhere");
-	// (a folder, as `node apps/web` gives: the folder itself, whose main file runs)
-	expect(applicationFolder(import.meta.dir, "/somewhere")).toBe(import.meta.dir);
-});
-
-test("a specifier is external as Bun.build's patterns say", () => {
-	expect(isExternal(RENDERER, undefined)).toBe(false);
-	expect(isExternal(RENDERER, [])).toBe(false);
-	expect(isExternal(RENDERER, [RENDERER])).toBe(true);
-	expect(isExternal(RENDERER, ["@decky.fx/*"])).toBe(true);
-	expect(isExternal(RENDERER, ["*"])).toBe(true);
-	expect(isExternal(RENDERER, ["@decky.fx/raven-tsx"])).toBe(false);
-	// (the dots of a pattern are dots, not any character)
-	expect(isExternal("@deckyXfx/raven-tsx/solid/renderer", ["@decky.fx/*"])).toBe(false);
+	// (a folder, as `node apps/web` gives: that of the main file it runs, else the folder itself)
+	const app = mkdtempSync(join(tmpdir(), "raven-tsx-entry-"));
+	try {
+		writeFileSync(join(app, "package.json"), JSON.stringify({ name: "app", main: "dist/index.cjs" }));
+		mkdirSync(join(app, "dist"));
+		writeFileSync(join(app, "dist", "index.cjs"), "");
+		expect(applicationFolder(app, "/somewhere")).toBe(join(app, "dist"));
+		expect(applicationFolder(import.meta.dir, "/somewhere")).toBe(import.meta.dir);
+		// (an entry that cannot be looked at, a loop of links: the working directory)
+		symlinkSync(join(app, "loop"), join(app, "loop"));
+		expect(applicationFolder(join(app, "loop"), "/somewhere")).toBe("/somewhere");
+	} finally {
+		rmSync(app, { recursive: true, force: true });
+	}
 });
 
 test("an installed package is named by the folder it is resolved from, and where it is installed", () => {

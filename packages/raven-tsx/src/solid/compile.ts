@@ -8,6 +8,7 @@
 
 import type { PluginItem, TransformOptions } from "@babel/core";
 import { readFileSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -108,21 +109,32 @@ export const RENDERER = "@decky.fx/raven-tsx/solid/renderer";
 
 /**
  * The folder an application's packages are resolved from: that of its entry file when the runtime
- * gives one that exists (`Bun.main`, `process.argv[1]`), the entry itself when it is a folder (`node
- * apps/web` runs that folder's main file), else the working directory. Run from the root of a
+ * gives one that exists (`Bun.main`, `process.argv[1]`), that of the main file of a folder given as
+ * the entry (`node apps/web`), else the working directory. Run from the root of a
  * workspace, the entry's folder may see another solid-js than the root.
  */
 export function applicationFolder(entry: string | undefined, cwd: string): string {
 	if (!entry || !isAbsolute(entry)) {
 		return cwd;
 	}
-	const found = statSync(entry, { throwIfNoEntry: false });
-	return found === undefined ? cwd : found.isDirectory() ? entry : dirname(entry);
-}
-
-/** Whether a build leaves this specifier out, as `external` of `Bun.build` says (`*` matches anything). */
-export function isExternal(specifier: string, external: readonly string[] | undefined): boolean {
-	return (external ?? []).some((pattern) => new RegExp(`^${pattern.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`).test(specifier));
+	try {
+		const found = statSync(entry, { throwIfNoEntry: false });
+		if (!found) {
+			return cwd;
+		}
+		if (!found.isDirectory()) {
+			return dirname(entry);
+		}
+		// (a folder runs its main file, which may be deeper and see other packages: `dist/index.cjs`)
+		try {
+			return dirname(createRequire(join(entry, "index.js")).resolve(entry));
+		} catch {
+			return entry;
+		}
+	} catch {
+		// (an entry that cannot be looked at, as a loop of links: the working directory)
+		return cwd;
+	}
 }
 
 /** Stops, saying why, when these versions of Solid are not those this package is written for. */
