@@ -75,19 +75,20 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 	const development = options.development ?? false;
 	// (the compiler is the one the plugin loads, from where it is installed)
 	assertSolidVersion({ preset: installedVersion("babel-preset-solid") });
-	// (the Solid of what is compiled, from the folder of each source: that of the application, which
-	// a build may hold in another installation than the plugin's)
-	const checkedFolders = new Set<string>();
-	const assertSolidOf = (path: string): void => {
-		const folder = dirname(path);
-		if (!checkedFolders.has(folder)) {
-			assertSolidVersion({ solid: installedVersion("solid-js", (name) => Bun.resolveSync(name, folder)) });
-			checkedFolders.add(folder);
-		}
-	};
 	return {
 		name: "raven-tsx-solid",
 		setup(build) {
+			// (the Solid of what is compiled, from the folder of each source: that of the application,
+			// which a build may hold in another installation than the plugin's; looked up again by each
+			// build, as Solid may have changed between two)
+			const checkedFolders = new Set<string>();
+			const assertSolidOf = (path: string): void => {
+				const folder = dirname(path);
+				if (!checkedFolders.has(folder)) {
+					assertSolidVersion({ solid: installedVersion("solid-js", (name) => Bun.resolveSync(name, folder)) });
+					checkedFolders.add(folder);
+				}
+			};
 			// (Bun runs no onResolve of a plugin for a package: the server's file is read as the client's)
 			build.onLoad({ filter: /[\\/]solid-js[\\/].*server\.c?js$/ }, ({ path }) => {
 				const client = clientFilesOf(solidRoot(path), development).get(path);

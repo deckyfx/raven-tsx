@@ -38,8 +38,10 @@ test("the installed versions are those this package finds", () => {
 test("a version is found where it is asked to be resolved, as the plugin does from a source's folder", () => {
 	const from = (folder: string) => (name: string) => Bun.resolveSync(name, folder);
 	expect(installedVersion("solid-js", from(import.meta.dir))).toBe(manifest.devDependencies["solid-js"]);
-	// (a folder with no node_modules above it has none)
-	expect(installedVersion("solid-js", from("/"))).toBeUndefined();
+	// (a package its resolver does not find is not installed there)
+	expect(installedVersion("solid-js", () => {
+		throw new Error("not found");
+	})).toBeUndefined();
 });
 
 test("the check throws the problem, and passes Solid 1", () => {

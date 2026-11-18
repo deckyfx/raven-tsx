@@ -219,11 +219,13 @@ try {
 		overrides: { [nativeName]: `file:${native}` },
 	}, null, 2));
 	await Bun.write(`${solid2}/bunfig.toml`, `preload = ["${manifest.name}/solid/preload"]\n`);
-	// (it says it started, then imports the renderer, which a Solid 2 makes fail on its own: the check
-	// must stop it before, so the message is never printed)
-	await Bun.write(`${solid2}/src/index.tsx`, `console.log("${solid2Started}");\nawait import("${manifest.name}/solid");\n`);
+	// (an entry with no JSX, which the plugin does not compile, says it started, then imports a source
+	// of Solid and so the renderer, which a Solid 2 makes fail on its own: the check must stop it
+	// before, so the message is never printed)
+	await Bun.write(`${solid2}/src/index.ts`, `console.log("${solid2Started}");\nawait import("./app.tsx");\n`);
+	await Bun.write(`${solid2}/src/app.tsx`, `import { Label } from "${manifest.name}/solid";\nexport const app = () => <Label>never</Label>;\n`);
 	await run(["bun", "install"], solid2);
-	await refused(["bun", "run", "src/index.tsx"], solid2, solid2Says, solid2Started);
+	await refused(["bun", "run", "src/index.ts"], solid2, solid2Says, solid2Started);
 	console.log("with Solid 2 installed, the preload stops and says to install Solid 1");
 
 	if (existsSync(`${platform}/raven_napi.node`)) {
@@ -319,7 +321,7 @@ try {
 		console.log(`installed by npm, Solid runs under Node.js through its register, and a signal reaches its widget: Raven ${signalled.trim()}`);
 
 		// (the application with Solid 2, run by Node.js: the register stops it as the preload does)
-		await refused(["node", "--import", `${manifest.name}/solid/register`, "src/index.tsx"], solid2, solid2Says, solid2Started);
+		await refused(["node", "--import", `${manifest.name}/solid/register`, "src/index.ts"], solid2, solid2Says, solid2Started);
 		console.log("with Solid 2 installed, the register of Node.js stops too and says to install Solid 1");
 	} else {
 		console.log(`${nativeName} has no addon of the Node.js binding: nothing runs under Node.js here`);
