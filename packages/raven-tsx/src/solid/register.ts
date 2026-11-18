@@ -23,7 +23,7 @@ import { applicationFolder, assertSolidVersion, installedPackage, isTypeScript, 
 // renderer of the package imports and the one of the application's entry, which may be another copy)
 assertSolidVersion({ solid: installedPackage("solid-js"), preset: installedPackage("babel-preset-solid") });
 const application = applicationFolder(process.argv[1], process.cwd());
-assertSolidVersion({ solid: installedPackage("solid-js", (name) => createRequire(join(application, "index.js")).resolve(name)) });
+assertSolidVersion({ solid: installedPackage("solid-js", (name) => createRequire(join(application, "index.js")).resolve(name), application) });
 
 const [{ default: babel }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);
 

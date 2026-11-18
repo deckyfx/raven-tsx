@@ -7,17 +7,22 @@
  */
 
 import type { PluginItem, TransformOptions } from "@babel/core";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The major version of Solid this package is written for: its renderer, its compiler. */
 export const SOLID_MAJOR = 1;
 
-/** A package as it is installed: its version, and the folder that holds it. */
+/**
+ * A package as it is installed: its version, the folder that holds it, and the folder it was
+ * resolved from (the project that uses it: with pnpm, the folder that holds it is in a store that
+ * several projects share).
+ */
 export interface InstalledPackage {
 	readonly version: string;
 	readonly folder: string;
+	readonly from: string;
 }
 
 /**
@@ -48,7 +53,7 @@ export function solidVersionProblem(versions: SolidVersions): string | undefined
 	const commands: string[] = [];
 	for (const [name, installed] of [["solid-js", versions.solid], ["babel-preset-solid", versions.preset]] as const) {
 		if (installed !== undefined && Number.parseInt(versionOf(installed), 10) !== SOLID_MAJOR) {
-			found.push(`${name} ${versionOf(installed)}${typeof installed === "string" ? "" : ` (${installed.folder})`}`);
+			found.push(`${name} ${versionOf(installed)}${typeof installed === "string" ? "" : ` (resolved from ${installed.from}, installed in ${installed.folder})`}`);
 			commands.push(install[name]);
 		}
 	}
@@ -57,19 +62,22 @@ export function solidVersionProblem(versions: SolidVersions): string | undefined
 	}
 	return (
 		`raven-tsx: @decky.fx/raven-tsx/solid supports Solid ${SOLID_MAJOR}, not ${found.join(" and ")}. ` +
-		`Install Solid ${SOLID_MAJOR} in the project that installs ${found.length > 1 ? "each" : "it"}: ${commands.join("; ")}. ` +
+		`Install Solid ${SOLID_MAJOR} in the project of the folder it is resolved from, or update the dependency that brings that copy: ${commands.join("; ")}. ` +
 		`Solid 2 comes in a later version of raven-tsx.`
 	);
 }
+
+/** This package's folder of Solid, where its renderer and loaders resolve their packages from. */
+const HERE = dirname(fileURLToPath(import.meta.url));
 
 /** Where a package's entry point is: from this package by default, the copy its renderer and loaders import. */
 const fromHere = (name: string): string => fileURLToPath(import.meta.resolve(name));
 
 /**
- * A package as it is installed where `resolveEntry` resolves its entry point (from this package by
- * default), or nothing when it is not installed there.
+ * A package as it is installed where `resolveEntry` resolves its entry point, from the folder `from`
+ * (this package by default), or nothing when it is not installed there.
  */
-export function installedPackage(name: string, resolveEntry: (name: string) => string = fromHere): InstalledPackage | undefined {
+export function installedPackage(name: string, resolveEntry: (name: string) => string = fromHere, from: string = HERE): InstalledPackage | undefined {
 	let path: string;
 	try {
 		path = resolveEntry(name);
@@ -81,7 +89,7 @@ export function installedPackage(name: string, resolveEntry: (name: string) => s
 		try {
 			const manifest = JSON.parse(readFileSync(join(folder, "package.json"), "utf8")) as { readonly name?: unknown; readonly version?: unknown };
 			if (manifest.name === name && typeof manifest.version === "string") {
-				return { version: manifest.version, folder };
+				return { version: manifest.version, folder, from };
 			}
 		} catch {
 			// (no package.json in this folder: the one above)
@@ -100,11 +108,21 @@ export const RENDERER = "@decky.fx/raven-tsx/solid/renderer";
 
 /**
  * The folder an application's packages are resolved from: that of its entry file when the runtime
- * gives one that exists (`Bun.main`, `process.argv[1]`), else the working directory. Run from the
- * root of a workspace, the entry's folder may see another solid-js than the root.
+ * gives one that exists (`Bun.main`, `process.argv[1]`), the entry itself when it is a folder (`node
+ * apps/web` runs that folder's main file), else the working directory. Run from the root of a
+ * workspace, the entry's folder may see another solid-js than the root.
  */
 export function applicationFolder(entry: string | undefined, cwd: string): string {
-	return entry && isAbsolute(entry) && existsSync(entry) ? dirname(entry) : cwd;
+	if (!entry || !isAbsolute(entry)) {
+		return cwd;
+	}
+	const found = statSync(entry, { throwIfNoEntry: false });
+	return found === undefined ? cwd : found.isDirectory() ? entry : dirname(entry);
+}
+
+/** Whether a build leaves this specifier out, as `external` of `Bun.build` says (`*` matches anything). */
+export function isExternal(specifier: string, external: readonly string[] | undefined): boolean {
+	return (external ?? []).some((pattern) => new RegExp(`^${pattern.split("*").map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`).test(specifier));
 }
 
 /** Stops, saying why, when these versions of Solid are not those this package is written for. */

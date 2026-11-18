@@ -17,5 +17,5 @@ import { solidPlugin } from "./plugin";
 // the one of the application's entry, which may be another copy)
 assertSolidVersion({ solid: installedPackage("solid-js") });
 const application = applicationFolder(Bun.main, process.cwd());
-assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, application)) });
+assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, application), application) });
 plugin(solidPlugin());

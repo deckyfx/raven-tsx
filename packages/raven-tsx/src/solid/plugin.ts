@@ -12,7 +12,7 @@
 import type { BunPlugin } from "bun";
 import { readFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
-import { assertSolidVersion, installedPackage, isTypeScript, RENDERER, solidBabelOptions, SOURCES } from "./compile";
+import { assertSolidVersion, installedPackage, isExternal, isTypeScript, RENDERER, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
 export interface SolidPluginOptions {
@@ -85,9 +85,13 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 			const assertSolidOf = (path: string): void => {
 				const folder = dirname(path);
 				if (!checkedFolders.has(folder)) {
-					assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, folder)) });
-					// (and the solid-js of the renderer this source's compiled TSX imports, which may be another copy)
-					assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, dirname(Bun.resolveSync(RENDERER, folder)))) });
+					assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, folder), folder) });
+					// (and the solid-js of the renderer this source's compiled TSX imports, which may be another
+					// copy; unless the build leaves the renderer out, for where it runs to resolve. The preload's
+					// plugin has no build configuration)
+					if (!isExternal(RENDERER, build.config?.external)) {
+						assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, dirname(Bun.resolveSync(RENDERER, folder))), folder) });
+					}
 					checkedFolders.add(folder);
 				}
 			};
