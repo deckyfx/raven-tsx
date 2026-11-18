@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applicationFolder, assertSolidVersion, installedPackage, installedVersion, preservesSymlinksMain, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
+import { applicationFolder, assertSolidVersion, installedPackage, installedVersion, nodeOptionsWords, preservesSymlinksMain, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
 import manifest from "../../../package.json";
 
 /** Whether this system lets a process make symbolic links (Windows asks for a privilege or developer mode). */
@@ -138,4 +138,15 @@ test("Node.js keeps the link of its main file when told so on its command line o
 	expect(preservesSymlinksMain([], "--max-old-space-size=4096 --preserve-symlinks-main")).toBe(true);
 	// (another flag that starts the same is not it)
 	expect(preservesSymlinksMain(["--preserve-symlinks"], "--preserve-symlinks")).toBe(false);
+	// (nor the flag's words inside a quoted value: one word, a file name)
+	expect(preservesSymlinksMain([], '--require "./setup --preserve-symlinks-main fixture.cjs"')).toBe(false);
+	expect(preservesSymlinksMain([], '--require "./a b.cjs" --preserve-symlinks-main')).toBe(true);
+});
+
+test("NODE_OPTIONS is split into words as Node.js splits it", () => {
+	expect(nodeOptionsWords("")).toEqual([]);
+	expect(nodeOptionsWords("  --a   --b=1 ")).toEqual(["--a", "--b=1"]);
+	expect(nodeOptionsWords('--require "./with space.cjs" --c')).toEqual(["--require", "./with space.cjs", "--c"]);
+	expect(nodeOptionsWords('--title "say \\"hi\\""')).toEqual(["--title", 'say "hi"']);
+	expect(nodeOptionsWords('--empty ""')).toEqual(["--empty", ""]);
 });

@@ -165,7 +165,37 @@ export function applicationFolder(entry: string | undefined, cwd: string, preser
 /** Whether Node.js keeps the link of its main file: `--preserve-symlinks-main` on its command line or in NODE_OPTIONS. */
 export function preservesSymlinksMain(execArgv: readonly string[], nodeOptions: string | undefined): boolean {
 	const flag = "--preserve-symlinks-main";
-	return execArgv.includes(flag) || (nodeOptions ?? "").split(/\s+/).includes(flag);
+	return execArgv.includes(flag) || nodeOptionsWords(nodeOptions ?? "").includes(flag);
+}
+
+/**
+ * The words of NODE_OPTIONS as Node.js reads them: split at white space, but a value in double
+ * quotes is one word, in which a backslash keeps the character after it.
+ */
+export function nodeOptionsWords(options: string): string[] {
+	const words: string[] = [];
+	let word: string | undefined;
+	let quoted = false;
+	for (let index = 0; index < options.length; index++) {
+		const character = options.charAt(index);
+		if (quoted && character === "\\" && index + 1 < options.length) {
+			word = (word ?? "") + options.charAt(++index);
+		} else if (character === '"') {
+			quoted = !quoted;
+			word ??= "";
+		} else if (!quoted && /\s/.test(character)) {
+			if (word !== undefined) {
+				words.push(word);
+				word = undefined;
+			}
+		} else {
+			word = (word ?? "") + character;
+		}
+	}
+	if (word !== undefined) {
+		words.push(word);
+	}
+	return words;
 }
 
 /** Stops, saying why, when these versions of Solid are not those this package is written for. */
