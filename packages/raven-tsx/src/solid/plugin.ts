@@ -12,7 +12,7 @@
 import type { BunPlugin } from "bun";
 import { readFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
-import { assertSolidVersion, installedVersion, isTypeScript, RENDERER, solidBabelOptions, SOURCES } from "./compile";
+import { assertSolidVersion, installedPackage, isTypeScript, RENDERER, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
 export interface SolidPluginOptions {
@@ -74,7 +74,7 @@ const solidRoot = (path: string): string => path.slice(0, path.lastIndexOf(`${se
 export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 	const development = options.development ?? false;
 	// (the compiler is the one the plugin loads, from where it is installed)
-	assertSolidVersion({ preset: installedVersion("babel-preset-solid") });
+	assertSolidVersion({ preset: installedPackage("babel-preset-solid") });
 	return {
 		name: "raven-tsx-solid",
 		setup(build) {
@@ -85,9 +85,9 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 			const assertSolidOf = (path: string): void => {
 				const folder = dirname(path);
 				if (!checkedFolders.has(folder)) {
-					assertSolidVersion({ solid: installedVersion("solid-js", (name) => Bun.resolveSync(name, folder)) });
+					assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, folder)) });
 					// (and the solid-js of the renderer this source's compiled TSX imports, which may be another copy)
-					assertSolidVersion({ solid: installedVersion("solid-js", (name) => Bun.resolveSync(name, dirname(Bun.resolveSync(RENDERER, folder)))) });
+					assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, dirname(Bun.resolveSync(RENDERER, folder)))) });
 					checkedFolders.add(folder);
 				}
 			};

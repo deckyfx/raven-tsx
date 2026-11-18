@@ -14,11 +14,23 @@ import { fileURLToPath } from "node:url";
 /** The major version of Solid this package is written for: its renderer, its compiler. */
 export const SOLID_MAJOR = 1;
 
-/** The versions of Solid's packages that an application has, each missing when it is not there. */
-export interface SolidVersions {
-	readonly solid?: string | undefined;
-	readonly preset?: string | undefined;
+/** A package as it is installed: its version, and the folder that holds it. */
+export interface InstalledPackage {
+	readonly version: string;
+	readonly folder: string;
 }
+
+/**
+ * The versions of Solid's packages that an application has (a version, or the installed package,
+ * whose folder the message then names), each missing when it is not there.
+ */
+export interface SolidVersions {
+	readonly solid?: string | InstalledPackage | undefined;
+	readonly preset?: string | InstalledPackage | undefined;
+}
+
+/** The version of a package as `SolidVersions` holds it. */
+const versionOf = (found: string | InstalledPackage): string => (typeof found === "string" ? found : found.version);
 
 /**
  * What is wrong with these versions of Solid, or nothing. Solid 2 moved its renderer
@@ -26,19 +38,20 @@ export interface SolidVersions {
  * with "Cannot find module", which does not say why.
  */
 export function solidVersionProblem(versions: SolidVersions): string | undefined {
-	const wrong = (
-		[
-			["solid-js", versions.solid],
-			["babel-preset-solid", versions.preset],
-		] as const
-	).filter(([, version]) => version !== undefined && Number.parseInt(version, 10) !== SOLID_MAJOR);
+	const wrong: string[] = [];
+	for (const [name, found] of [["solid-js", versions.solid], ["babel-preset-solid", versions.preset]] as const) {
+		if (found !== undefined && Number.parseInt(versionOf(found), 10) !== SOLID_MAJOR) {
+			// (with the folder it is in, when known: in a workspace, the project to change is the one that installs it)
+			wrong.push(`${name} ${versionOf(found)}${typeof found === "string" ? "" : ` (${found.folder})`}`);
+		}
+	}
 	if (wrong.length === 0) {
 		return undefined;
 	}
-	const found = wrong.map(([name, version]) => `${name} ${version}`).join(" and ");
+	const found = wrong.join(" and ");
 	return (
 		`raven-tsx: @decky.fx/raven-tsx/solid supports Solid ${SOLID_MAJOR}, not ${found}. ` +
-		`Install Solid ${SOLID_MAJOR}: npm install solid-js@${SOLID_MAJOR} && npm install -D babel-preset-solid@${SOLID_MAJOR} @babel/core@7 ` +
+		`Install Solid ${SOLID_MAJOR} in the project that installs it: npm install solid-js@${SOLID_MAJOR} && npm install -D babel-preset-solid@${SOLID_MAJOR} @babel/core@7 ` +
 		`(bun add solid-js@${SOLID_MAJOR} && bun add -d babel-preset-solid@${SOLID_MAJOR} @babel/core@7). Solid 2 comes in a later version of raven-tsx.`
 	);
 }
@@ -47,10 +60,10 @@ export function solidVersionProblem(versions: SolidVersions): string | undefined
 const fromHere = (name: string): string => fileURLToPath(import.meta.resolve(name));
 
 /**
- * The version of a package, found where `resolveEntry` resolves its entry point (from this package by
+ * A package as it is installed where `resolveEntry` resolves its entry point (from this package by
  * default), or nothing when it is not installed there.
  */
-export function installedVersion(name: string, resolveEntry: (name: string) => string = fromHere): string | undefined {
+export function installedPackage(name: string, resolveEntry: (name: string) => string = fromHere): InstalledPackage | undefined {
 	let path: string;
 	try {
 		path = resolveEntry(name);
@@ -62,13 +75,18 @@ export function installedVersion(name: string, resolveEntry: (name: string) => s
 		try {
 			const manifest = JSON.parse(readFileSync(join(folder, "package.json"), "utf8")) as { readonly name?: unknown; readonly version?: unknown };
 			if (manifest.name === name && typeof manifest.version === "string") {
-				return manifest.version;
+				return { version: manifest.version, folder };
 			}
 		} catch {
 			// (no package.json in this folder: the one above)
 		}
 	}
 	return undefined;
+}
+
+/** The version of a package where `resolveEntry` finds it, as `installedPackage` does. */
+export function installedVersion(name: string, resolveEntry?: (name: string) => string): string | undefined {
+	return installedPackage(name, resolveEntry)?.version;
 }
 
 /** What compiled TSX imports: the renderer of this package (see `solidBabelOptions`). */

@@ -2,7 +2,7 @@
 
 import { expect, test } from "bun:test";
 import { dirname } from "node:path";
-import { applicationFolder, assertSolidVersion, installedVersion, RENDERER, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
+import { applicationFolder, assertSolidVersion, installedPackage, installedVersion, RENDERER, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
 import manifest from "../../../package.json";
 
 test("Solid 1 is what the package is written for", () => {
@@ -66,4 +66,12 @@ test("the renderer's solid-js is found from a source's folder, as the plugin che
 	expect(rendererSolid(import.meta.dir)).toBe(manifest.devDependencies["solid-js"]);
 	// (a folder where the renderer cannot be found: nothing to check)
 	expect(installedVersion("solid-js", () => Bun.resolveSync("@decky.fx/no-such-renderer", import.meta.dir))).toBeUndefined();
+});
+
+test("an installed package is named with its folder, the project to change", () => {
+	const problem = solidVersionProblem({ solid: { version: "2.0.1", folder: "/work/apps/web/node_modules/solid-js" }, preset: { version: "1.9.19", folder: "/work/node_modules/babel-preset-solid" } });
+	expect(problem).toContain("not solid-js 2.0.1 (/work/apps/web/node_modules/solid-js).");
+	expect(problem).not.toContain("babel-preset-solid 1.9.19");
+	expect(problem).toContain("Install Solid 1 in the project that installs it:");
+	expect(installedPackage("solid-js")?.folder).toMatch(/[\\/]node_modules[\\/]solid-js$/);
 });
