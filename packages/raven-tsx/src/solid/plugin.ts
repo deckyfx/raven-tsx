@@ -12,7 +12,7 @@
 import type { BunPlugin } from "bun";
 import { readFileSync } from "node:fs";
 import { dirname, resolve, sep } from "node:path";
-import { assertSolidVersion, installedPackage, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+import { assertSolidVersion, installedPackage, isRendererFile, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
 export interface SolidPluginOptions {
@@ -70,8 +70,8 @@ function clientFilesOf(root: string, development: boolean): ReadonlyMap<string, 
 /** The folder of the solid-js package a file of it is in. */
 const solidRoot = (path: string): string => path.slice(0, path.lastIndexOf(`${sep}solid-js${sep}`) + `${sep}solid-js`.length);
 
-/** The renderer of this package, as a file: what compiled TSX imports (`RENDERER` in `./compile`). */
-const RENDERER_FILE = /[\\/]raven-tsx[\\/](?:.*[\\/])?solid[\\/]renderer\.[cm]?[jt]s$/;
+/** Files that may be the renderer of this package; `isRendererFile` tells which is. */
+const RENDERER_FILE = /[\\/]renderer\.[cm]?[jt]s$/;
 
 /** The plugin: compiles TSX for Solid, and takes Solid's build for clients. */
 export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
@@ -95,7 +95,10 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 			// than the sources'. A renderer the build leaves out, however it does, is never loaded here, and
 			// the place it runs in resolves it)
 			build.onLoad({ filter: RENDERER_FILE }, ({ path }) => {
-				assertSolidFrom(dirname(path));
+				if (isRendererFile(path)) {
+					assertSolidFrom(dirname(path));
+				}
+				// (as it is, with the loader Bun would take: a hook of Bun's onLoad cannot pass a file on)
 				return { contents: readFileSync(path, "utf8"), loader: /\.[cm]?ts$/.test(path) ? "ts" : "js" };
 			});
 			// (Bun runs no onResolve of a plugin for a package: the server's file is read as the client's)

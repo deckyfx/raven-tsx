@@ -99,6 +99,26 @@ export function installedPackage(name: string, resolveEntry: (name: string) => s
 	return undefined;
 }
 
+/** The name of the package a file is in: that of the nearest package.json above it that has one. */
+export function packageNameOf(path: string): string | undefined {
+	for (let folder = dirname(path); folder !== dirname(folder); folder = dirname(folder)) {
+		try {
+			const manifest = JSON.parse(readFileSync(join(folder, "package.json"), "utf8")) as { readonly name?: unknown };
+			if (typeof manifest.name === "string") {
+				return manifest.name;
+			}
+		} catch {
+			// (no package.json here, or one that does not parse: the one above)
+		}
+	}
+	return undefined;
+}
+
+/** Whether a file is the renderer of this package, wherever it is installed (a link to a folder of another name too). */
+export function isRendererFile(path: string): boolean {
+	return /[\\/]solid[\\/]renderer\.[cm]?[jt]s$/.test(path) && packageNameOf(path) === RENDERER.split("/solid/")[0];
+}
+
 /** The version of a package where `resolveEntry` finds it, as `installedPackage` does. */
 export function installedVersion(name: string, resolveEntry?: (name: string) => string): string | undefined {
 	return installedPackage(name, resolveEntry)?.version;

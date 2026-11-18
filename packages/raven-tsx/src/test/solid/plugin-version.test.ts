@@ -4,7 +4,7 @@
  */
 
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { RENDERER } from "../../solid/compile";
@@ -86,4 +86,28 @@ test("a renderer the build leaves out is not checked, however it does: where the
 	expect(await build(project("1.9.19", "2.0.1"), { packages: "external" })).toBe("");
 	// (the source's own Solid is still checked)
 	expect(await build(project("2.0.1", "1.9.19"), { external: [RENDERER] })).toContain("not solid-js 2.0.1");
+});
+
+test("a renderer installed through a link to a folder of another name is checked too", async () => {
+	const root = project("1.9.19", "2.0.1");
+	// (node_modules/@decky.fx/raven-tsx links to vendor/local-raven: Bun loads the real path)
+	const raven = join(root, "node_modules", "@decky.fx", "raven-tsx");
+	const vendor = join(root, "vendor", "local-raven");
+	mkdirSync(dirname(vendor), { recursive: true });
+	renameSync(raven, vendor);
+	symlinkSync(vendor, raven, "dir");
+	const failed = await build(root);
+	expect(failed).toContain("supports Solid 1, not solid-js 2.0.1");
+	expect(failed).toContain(`resolved from ${join(vendor, "solid")}`);
+});
+
+test("a file of another package named solid/renderer is not checked", async () => {
+	const root = project("1.9.19", "1.9.19");
+	// (the application's own renderer.js, in a folder that sees a Solid 2: not this package's renderer)
+	const other = join(root, "lib", "raven-tsx", "src", "solid");
+	write(join(root, "lib", "raven-tsx", "package.json"), JSON.stringify({ name: "my-own-renderer", version: "1.0.0", type: "module" }));
+	write(join(other, "renderer.js"), "export const mine = 1;\n");
+	solidPackage(join(root, "lib", "raven-tsx", "node_modules", "solid-js"), "2.0.1");
+	write(join(root, "src", "app.tsx"), `import { mine } from "../lib/raven-tsx/src/solid/renderer.js";\nexport const app = () => <label>{mine}</label>;\n`);
+	expect(await build(root)).toBe("");
 });
