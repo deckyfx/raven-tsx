@@ -12,7 +12,7 @@
 import type { BunPlugin } from "bun";
 import { readFileSync } from "node:fs";
 import { resolve, sep } from "node:path";
-import { isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+import { assertSolidVersion, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
 export interface SolidPluginOptions {
@@ -73,6 +73,8 @@ const solidRoot = (path: string): string => path.slice(0, path.lastIndexOf(`${se
 /** The plugin: compiles TSX for Solid, and takes Solid's build for clients. */
 export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 	const development = options.development ?? false;
+	// (before the application imports Solid: a Solid 2 would fail there without saying why)
+	assertSolidVersion();
 	return {
 		name: "raven-tsx-solid",
 		setup(build) {

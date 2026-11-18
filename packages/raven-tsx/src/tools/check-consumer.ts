@@ -11,6 +11,9 @@
  * bunfig.toml preloads it, and renders a signal. A third runs under Node.js, installed by npm: React
  * rendered headless, an action fired, the state it changed shown. It needs the addon of Raven's
  * Node.js binding in the package of the platform, which Windows does not have yet.
+ *
+ * A last application has Solid 2, as npm gives it by default: the preload of Bun, and the register
+ * of Node.js where it runs, must stop it and say to install Solid 1, which the package is written for.
  */
 
 import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
@@ -39,6 +42,15 @@ async function run(command: readonly string[], cwd: string): Promise<string> {
 		throw new CommandFailed(`check:consumer: ${command.join(" ")} failed in ${cwd}:\n${output}${errors}`);
 	}
 	return output;
+}
+
+/** Runs a command that must fail and say this; throws if it succeeds or says something else. */
+async function refused(command: readonly string[], cwd: string, says: string): Promise<void> {
+	const child = Bun.spawn([...command], { cwd, stdout: "pipe", stderr: "pipe" });
+	const [output, errors, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+	if (code === 0 || !`${output}${errors}`.includes(says)) {
+		throw new CommandFailed(`check:consumer: ${command.join(" ")} in ${cwd} should fail saying "${says}", and exited with ${code}:\n${output}${errors}`);
+	}
 }
 
 /** Packs a package folder as npm would, and returns the path of its tarball. */
@@ -189,6 +201,24 @@ try {
 	const rendered = await run(["bun", "run", "src/check.tsx"], solid);
 	console.log(`a signal reaches its widget, through the plugin of the package: Raven ${rendered.trim()}`);
 
+	// (Solid 2, as npm gives solid-js by default since 2.0.0, with the compiler npm still gives: the
+	// application must stop at the preload and say why, not fail at its first import of Solid)
+	const solid2 = `${work}/solid2`;
+	const solid2Says = "@decky.fx/raven-tsx/solid supports Solid 1, not solid-js 2.";
+	await Bun.write(`${solid2}/package.json`, JSON.stringify({
+		name: "consumer-solid2",
+		private: true,
+		type: "module",
+		dependencies: { [manifest.name]: `file:${main}`, "solid-js": "^2" },
+		devDependencies: { "@babel/core": manifest.devDependencies["@babel/core"], "babel-preset-solid": manifest.devDependencies["babel-preset-solid"] },
+		overrides: { [nativeName]: `file:${native}` },
+	}, null, 2));
+	await Bun.write(`${solid2}/bunfig.toml`, `preload = ["${manifest.name}/solid/preload"]\n`);
+	await Bun.write(`${solid2}/src/index.tsx`, `import { Label } from "${manifest.name}/solid";\nconsole.log(<Label>never</Label>);\n`);
+	await run(["bun", "install"], solid2);
+	await refused(["bun", "run", "src/index.tsx"], solid2, solid2Says);
+	console.log("with Solid 2 installed, the preload stops and says to install Solid 1");
+
 	if (existsSync(`${platform}/raven_napi.node`)) {
 		const node = `${work}/node`;
 		const nodeManifest = {
@@ -280,6 +310,10 @@ try {
 		await run(["npm", "install", "--no-audit", "--no-fund"], nodeSolid);
 		const signalled = await run(["node", "--import", `${manifest.name}/solid/register`, "src/check.tsx"], nodeSolid);
 		console.log(`installed by npm, Solid runs under Node.js through its register, and a signal reaches its widget: Raven ${signalled.trim()}`);
+
+		// (the application with Solid 2, run by Node.js: the register stops it as the preload does)
+		await refused(["node", "--import", `${manifest.name}/solid/register`, "src/index.tsx"], solid2, solid2Says);
+		console.log("with Solid 2 installed, the register of Node.js stops too and says to install Solid 1");
 	} else {
 		console.log(`${nativeName} has no addon of the Node.js binding: nothing runs under Node.js here`);
 	}

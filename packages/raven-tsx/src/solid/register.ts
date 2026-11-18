@@ -17,7 +17,10 @@ import solid from "babel-preset-solid";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { fileURLToPath } from "node:url";
-import { isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+import { assertSolidVersion, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+
+// (before the application imports Solid: a Solid 2 would fail there without saying why)
+assertSolidVersion();
 
 /** Whether a specifier is of solid-js, which must be its build for clients. */
 const isSolid = (specifier: string): boolean => specifier === "solid-js" || specifier.startsWith("solid-js/");
