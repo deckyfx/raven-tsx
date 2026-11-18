@@ -74,6 +74,15 @@ const solidRoot = (path: string): string => path.slice(0, path.lastIndexOf(`${se
 /** Files that may be the renderer of this package; `isRendererFile` tells which is. */
 const RENDERER_FILE = /[\\/]renderer\.[cm]?[jt]s$/;
 
+/** The real path of this package's renderer beside the plugin, or nothing when it is not there. */
+function rendererPath(): string | undefined {
+	try {
+		return realpathSync(fileURLToPath(new URL("./renderer.ts", import.meta.url)));
+	} catch {
+		return undefined;
+	}
+}
+
 /** The plugin: compiles TSX for Solid, and takes Solid's build for clients. */
 export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 	const development = options.development ?? false;
@@ -105,12 +114,15 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 					return undefined;
 				});
 			} else {
-				// (at run time a hook must give the contents: only this package's own renderer is taken)
-				const renderer = realpathSync(fileURLToPath(new URL("./renderer.ts", import.meta.url)));
-				build.onLoad({ filter: new RegExp(`^${renderer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }, ({ path }) => {
-					assertSolidFrom(dirname(path));
-					return { contents: readFileSync(path, "utf8"), loader: "ts" };
-				});
+				// (at run time a hook must give the contents: only this package's own renderer is taken. The
+				// preload has checked its solid-js already; this checks it again when it is loaded)
+				const renderer = rendererPath();
+				if (renderer) {
+					build.onLoad({ filter: new RegExp(`^${renderer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }, ({ path }) => {
+						assertSolidFrom(dirname(path));
+						return { contents: readFileSync(path, "utf8"), loader: "ts" };
+					});
+				}
 			}
 			// (Bun runs no onResolve of a plugin for a package: the server's file is read as the client's)
 			build.onLoad({ filter: /[\\/]solid-js[\\/].*server\.c?js$/ }, ({ path }) => {

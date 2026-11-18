@@ -16,13 +16,13 @@ import { readFileSync } from "node:fs";
 import { createRequire, registerHooks } from "node:module";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { applicationFolder, assertSolidVersion, installedPackage, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+import { applicationFolder, assertSolidVersion, installedPackage, isTypeScript, preservesSymlinksMain, solidBabelOptions, SOURCES } from "./compile";
 
 // (before the compiler is loaded and the application imports Solid: a Solid 2 would fail there
 // without saying why, as would a Solid 2 with no compiler installed yet. Both the solid-js that the
 // renderer of the package imports and the one of the application's entry, which may be another copy)
 assertSolidVersion({ solid: installedPackage("solid-js"), preset: installedPackage("babel-preset-solid") });
-const application = applicationFolder(process.argv[1], process.cwd(), process.execArgv.includes("--preserve-symlinks-main"));
+const application = applicationFolder(process.argv[1], process.cwd(), preservesSymlinksMain(process.execArgv, process.env["NODE_OPTIONS"]));
 assertSolidVersion({ solid: installedPackage("solid-js", (name) => createRequire(join(application, "index.js")).resolve(name), application) });
 
 const [{ default: babel }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);

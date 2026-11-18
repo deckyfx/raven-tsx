@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { applicationFolder, assertSolidVersion, installedPackage, installedVersion, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
+import { applicationFolder, assertSolidVersion, installedPackage, installedVersion, preservesSymlinksMain, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
 import manifest from "../../../package.json";
 
 /** Whether this system lets a process make symbolic links (Windows asks for a privilege or developer mode). */
@@ -101,6 +101,13 @@ test.skipIf(!canLink())("an entry that is a link counts where it leads, unless t
 		symlinkSync(join(root, "apps", "web", "index.mjs"), join(root, "start.mjs"));
 		expect(applicationFolder(join(root, "start.mjs"), "/somewhere")).toBe(join(root, "apps", "web"));
 		expect(applicationFolder(join(root, "start.mjs"), "/somewhere", true)).toBe(root);
+		// (a link to a folder whose main file is deeper: through the link when it is kept)
+		mkdirSync(join(root, "real", "dist"), { recursive: true });
+		writeFileSync(join(root, "real", "package.json"), JSON.stringify({ name: "real", main: "dist/index.cjs" }));
+		writeFileSync(join(root, "real", "dist", "index.cjs"), "");
+		symlinkSync(join(root, "real"), join(root, "app-link"), "dir");
+		expect(applicationFolder(join(root, "app-link"), "/somewhere")).toBe(join(root, "real", "dist"));
+		expect(applicationFolder(join(root, "app-link"), "/somewhere", true)).toBe(join(root, "app-link", "dist"));
 		// (an entry that cannot be looked at, a loop of links: the working directory)
 		symlinkSync(join(root, "loop"), join(root, "loop"));
 		expect(applicationFolder(join(root, "loop"), "/somewhere")).toBe("/somewhere");
@@ -123,4 +130,12 @@ test("an installed package is named by the folder it is resolved from, and where
 	expect(here?.folder).toMatch(/[\\/]node_modules[\\/]solid-js$/);
 	expect(here?.from).toMatch(/[\\/]src[\\/]solid$/);
 	expect(installedPackage("solid-js", (name) => Bun.resolveSync(name, import.meta.dir), import.meta.dir)?.from).toBe(import.meta.dir);
+});
+
+test("Node.js keeps the link of its main file when told so on its command line or in NODE_OPTIONS", () => {
+	expect(preservesSymlinksMain([], undefined)).toBe(false);
+	expect(preservesSymlinksMain(["--preserve-symlinks-main"], undefined)).toBe(true);
+	expect(preservesSymlinksMain([], "--max-old-space-size=4096 --preserve-symlinks-main")).toBe(true);
+	// (another flag that starts the same is not it)
+	expect(preservesSymlinksMain(["--preserve-symlinks"], "--preserve-symlinks")).toBe(false);
 });

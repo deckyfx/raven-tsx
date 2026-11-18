@@ -9,7 +9,7 @@
 import type { PluginItem, TransformOptions } from "@babel/core";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The major version of Solid this package is written for: its renderer, its compiler. */
@@ -148,9 +148,11 @@ export function applicationFolder(entry: string | undefined, cwd: string, preser
 			// unless the runtime is told to keep the link, as --preserve-symlinks-main tells Node.js)
 			return dirname(preserveSymlinks ? entry : realpathSync(entry));
 		}
-		// (a folder runs its main file, which may be deeper and see other packages: `dist/index.cjs`)
+		// (a folder runs its main file, which may be deeper and see other packages: `dist/index.cjs`;
+		// found through the link when the runtime keeps it)
 		try {
-			return dirname(createRequire(join(entry, "index.js")).resolve(entry));
+			const main = createRequire(join(entry, "index.js")).resolve(entry);
+			return dirname(preserveSymlinks ? join(entry, relative(realpathSync(entry), main)) : main);
 		} catch {
 			return entry;
 		}
@@ -158,6 +160,12 @@ export function applicationFolder(entry: string | undefined, cwd: string, preser
 		// (an entry that cannot be looked at, as a loop of links: the working directory)
 		return cwd;
 	}
+}
+
+/** Whether Node.js keeps the link of its main file: `--preserve-symlinks-main` on its command line or in NODE_OPTIONS. */
+export function preservesSymlinksMain(execArgv: readonly string[], nodeOptions: string | undefined): boolean {
+	const flag = "--preserve-symlinks-main";
+	return execArgv.includes(flag) || (nodeOptions ?? "").split(/\s+/).includes(flag);
 }
 
 /** Stops, saying why, when these versions of Solid are not those this package is written for. */
