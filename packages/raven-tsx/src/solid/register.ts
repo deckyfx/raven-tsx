@@ -13,13 +13,16 @@
  */
 
 import { readFileSync } from "node:fs";
-import { registerHooks } from "node:module";
+import { createRequire, registerHooks } from "node:module";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { assertSolidVersion, installedVersion, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
 // (before the compiler is loaded and the application imports Solid: a Solid 2 would fail there
-// without saying why, as would a Solid 2 with no compiler installed yet)
+// without saying why, as would a Solid 2 with no compiler installed yet. Both the solid-js that the
+// renderer of the package imports and the one of the application's folder, which may be another copy)
 assertSolidVersion({ solid: installedVersion("solid-js"), preset: installedVersion("babel-preset-solid") });
+assertSolidVersion({ solid: installedVersion("solid-js", (name) => createRequire(join(process.cwd(), "index.js")).resolve(name)) });
 
 const [{ default: babel }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);
 

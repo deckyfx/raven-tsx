@@ -13,6 +13,8 @@ import { assertSolidVersion, installedVersion } from "./compile";
 import { solidPlugin } from "./plugin";
 
 // (before any file of the application runs: one with no JSX, which the plugin does not compile, may
-// start it and import Solid later; this is the solid-js that the renderer of the package imports)
+// start it and import Solid later. Both the solid-js that the renderer of the package imports and
+// the one of the application's folder, which may be another copy)
 assertSolidVersion({ solid: installedVersion("solid-js") });
+assertSolidVersion({ solid: installedVersion("solid-js", (name) => Bun.resolveSync(name, process.cwd())) });
 plugin(solidPlugin());
