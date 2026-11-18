@@ -125,12 +125,26 @@ function App(): ReactNode {
 		if (widget !== undefined && raven.Rwidget_is_valid(widget)) {
 			raven.Rmap_view_set_tile(widget, z, x, y, pixels, TILE, TILE);
 		}
+	}, (z, x, y) => {
+		const widget = map.current?.widget;
+		if (widget !== undefined && raven.Rwidget_is_valid(widget)) {
+			raven.Rmap_view_set_tile_failed(widget, z, x, y);
+		}
 	}));
 	const [place, setPlace] = useState(() => placeText(START.latitude, START.longitude, START.zoom));
 	const [status, setStatus] = useState(() => statusText(tiles, 0));
 	const frame = useRef(0);
 
 	useEffect(() => () => tiles.dispose(), [tiles]);
+
+	// (the view as the map holds it: Raven keeps the zoom asked for within MinZoom and MaxZoom, and says nothing of it)
+	useEffect(() => {
+		const widget = map.current?.widget;
+		if (widget !== undefined) {
+			const [latitude, longitude] = raven.Rmap_view_get_center(widget);
+			setPlace(placeText(latitude, longitude, raven.Rmap_view_get_zoom(widget)));
+		}
+	}, []);
 
 	// the status line, four times a second
 	useEffect(() => {

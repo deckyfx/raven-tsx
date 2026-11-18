@@ -5,13 +5,13 @@
  */
 
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import * as r from "../../core/raven";
 import { EVENT_VALUE_TYPES, EXTRA_PROPS, COMMON_PROPS, wiredCallbacks, wiredProps } from "../../core/events";
 import { checkLibrary, functionsOfBinding, missingFunctions, STAMP_FILE } from "../../core/library-check";
-import { apiAt, commitOf, provenanceProblem, readPin } from "../../tools/raven-pin";
+import { apiAt, commitOf, configuredFromElsewhere, provenanceProblem, readPin } from "../../tools/raven-pin";
 import { diffApi, parseApi, parseHeader, parseSchema, countOf, formatDiff, newCallbackSetters, type RavenApi } from "../../tools/raven-api";
 import { controlledAttributes, overrideOf } from "../../core/widget-instance";
 
@@ -278,6 +278,30 @@ test("a library that cannot be the build of a checkout is not stamped as such", 
 	expect(provenanceProblem("/elsewhere/libraven.so", "/raven", commitTime + 1, commitTime)).toContain("is not in");
 	expect(provenanceProblem("/raven-other/libraven.so", "/raven", commitTime + 1, commitTime)).toContain("is not in");
 	expect(provenanceProblem("/raven/build/libraven.so", "/raven", commitTime - 1, commitTime)).toContain("older");
+});
+
+test("a build folder of CMake configured from another source is told apart from one of this source", () => {
+	const directory = mkdtempSync(`${tmpdir()}/raven-build-`);
+	try {
+		const source = `${directory}/raven/bindings/node`;
+		const build = `${directory}/raven/build-node`;
+		mkdirSync(source, { recursive: true });
+		mkdirSync(`${directory}/addon`);
+		mkdirSync(build);
+		// (none yet: a fresh folder)
+		expect(configuredFromElsewhere(build, source)).toBe(false);
+		// (the project of this package that built the addon on Windows before Raven did)
+		writeFileSync(`${build}/CMakeCache.txt`, `# This is the CMakeCache file.\nCMAKE_HOME_DIRECTORY:INTERNAL=${directory}/addon\n`);
+		expect(configuredFromElsewhere(build, source)).toBe(true);
+		// (this one, written with the slashes of CMake, and with a path that goes round)
+		writeFileSync(`${build}/CMakeCache.txt`, `CMAKE_HOME_DIRECTORY:INTERNAL=${directory.replaceAll("\\", "/")}/raven/bindings/../bindings/node\n`);
+		expect(configuredFromElsewhere(build, source)).toBe(false);
+		// (a cache that does not say)
+		writeFileSync(`${build}/CMakeCache.txt`, "CMAKE_BUILD_TYPE:STRING=Release\n");
+		expect(configuredFromElsewhere(build, source)).toBe(false);
+	} finally {
+		rmSync(directory, { recursive: true, force: true });
+	}
 });
 
 test("a checkout git cannot read is not taken for a clean one", () => {

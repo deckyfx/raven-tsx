@@ -1,6 +1,7 @@
 import { createComponent, createRoot, getOwner, type JSX, type Owner } from "solid-js";
 import * as r from "../core/raven";
 import { RavenError } from "../core/errors";
+import { nextFrame } from "../core/events";
 import { resolveProps, type RavenProps } from "../core/props";
 import type { WindowOptions } from "../core/props.generated";
 import { makeWindow } from "../core/window-instance";
@@ -138,6 +139,8 @@ export async function runApp(code: () => JSX.Element, options?: WindowOptions, s
 			root?.unmount();
 		} finally {
 			r.Rshutdown();
+			// (the tasks Raven dropped as it stopped: what waited for them would wait for ever)
+			nextFrame.clear();
 		}
 	}
 }

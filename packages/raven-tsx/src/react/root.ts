@@ -2,6 +2,7 @@ import { createElement, type ReactNode, type ReactPortal } from "react";
 import { ConcurrentRoot } from "react-reconciler/constants.js";
 import * as r from "../core/raven";
 import { RavenError } from "../core/errors";
+import { nextFrame } from "../core/events";
 import { resolveProps, type RavenProps } from "../core/props";
 import type { WindowOptions } from "../core/props.generated";
 import { WidgetInstance } from "../core/widget-instance";
@@ -120,6 +121,8 @@ export async function runApp(element: ReactNode, options?: WindowOptions, start?
 			root?.unmount();
 		} finally {
 			r.Rshutdown();
+			// (the tasks Raven dropped as it stopped: what waited for them would wait for ever)
+			nextFrame.clear();
 		}
 	}
 }

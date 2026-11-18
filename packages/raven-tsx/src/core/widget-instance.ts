@@ -274,6 +274,32 @@ const SET_BY_CALL: Readonly<Record<string, Readonly<Record<string, (widget: r.Ri
 		},
 	},
 	TreeView: { Items: fillTree },
+	// (in double precision: the attributes of Raven 0.3.0 read a float, 120.000001 as 120, which is
+	// pixels at a high zoom. The other coordinate of the center stays)
+	MapView: {
+		Latitude: (widget, value) => setMapNumber("Latitude", value, (number) => r.Rmap_view_set_center(widget, number, r.Rmap_view_get_center(widget)[1])),
+		Longitude: (widget, value) => setMapNumber("Longitude", value, (number) => r.Rmap_view_set_center(widget, r.Rmap_view_get_center(widget)[0], number)),
+		Zoom: (widget, value) => setMapNumber("Zoom", value, (number) => r.Rmap_view_set_zoom(widget, number)),
+	},
+};
+
+/** Gives a MapView a number of its view, or says it did not take one that is not a number. */
+function setMapNumber(name: string, value: string, set: (number: number) => void): void {
+	const number = Number(value);
+	if (value.trim() === "" || !Number.isFinite(number)) {
+		console.warn(`raven-tsx: <MapView> did not take ${name}="${value}"`);
+		return;
+	}
+	set(number);
+}
+
+/**
+ * Attributes Raven takes only once the widget has the children they name: the page of a
+ * Carousel, which has no page before its children. They are set when the children are placed,
+ * and again when children come, as long as the widget does not hold them.
+ */
+const AFTER_CHILDREN: Readonly<Record<string, readonly string[]>> = {
+	Carousel: ["Page"],
 };
 
 /**
@@ -338,6 +364,12 @@ export class WidgetInstance implements HostNode {
 	private placing = false;
 	/** Its handlers were forgotten (`forgetTree`): placed again alive, it gets them back. */
 	private forgotten = false;
+	/**
+	 * Whether the widget took the Selected of its props, in a Table that selects several rows: one
+	 * given before its rows was refused, and is given again when they come; once taken, the rows the
+	 * user selects are theirs.
+	 */
+	private selectionTaken = false;
 	/** Counts the passes that close or open the windows in it: a newer one ends the one under way. */
 	private windowsPass = 0;
 
@@ -411,6 +443,9 @@ export class WidgetInstance implements HostNode {
 				if (this.holds(child) && widget !== null && r.Rwidget_is_valid(widget)) {
 					r.Rwidget_insert_child(this.id, widget, this.placeAmongPlaced(child));
 				}
+			}
+			if (this.state === "live") {
+				this.applyAfterChildren();
 			}
 		} catch (error) {
 			// (the framework keeps it, and takes it away with the rest of the tree that failed)
@@ -627,8 +662,12 @@ export class WidgetInstance implements HostNode {
 	 * gives them again, which tells the parent, that already took its child, to look at them.
 	 */
 	private applyAll(next: ResolvedProps): void {
+		const afterChildren = AFTER_CHILDREN[this.tag] ?? [];
 		for (const [name, value] of next.attributes) {
-			this.setAttribute(name, value);
+			// (not before the children: the widget is made with none)
+			if (!afterChildren.includes(name)) {
+				this.setAttribute(name, value);
+			}
 		}
 		this.applyData(new Map(), next);
 		applyHandlers(this.tag, this.id, new Map(), next.handlers);
@@ -663,11 +702,19 @@ export class WidgetInstance implements HostNode {
 			r.Rwidget_invalidate(this.id);
 		}
 		// (a Selected given before the rows existed was refused: it comes back with them. Not over the
-		// rows a user selected in a Table of several, once it had rows)
+		// rows a user selected in a Table of several, once it took the Selected asked for)
 		const selected = next.attributes.get("Selected");
-		const kept = previous !== null && CONTROLLED[this.tag]?.find(({ attribute }) => attribute === "Selected")?.keptWhen?.(next.attributes);
-		if (selected !== undefined && !kept && controlledAttributes(this.tag).includes("Selected")) {
+		const control = CONTROLLED[this.tag]?.find(({ attribute }) => attribute === "Selected");
+		if (selected === undefined || !control) {
+			return;
+		}
+		const several = control.keptWhen?.(next.attributes) === true;
+		if (previous?.attributes.get("Selected") !== selected) {
+			this.selectionTaken = false;
+		}
+		if (!several || !this.selectionTaken) {
 			this.setAttribute("Selected", selected);
+			this.selectionTaken = (control.same ?? sameValue)(control.read(this.id), selected);
 		}
 	}
 
@@ -784,6 +831,17 @@ export class WidgetInstance implements HostNode {
 			r.Rwidget_destroy(old);
 		}
 		this.applyParentAttributes();
+		this.applyAfterChildren();
+	}
+
+	/** Sets the attributes that need the children of the widget, once it has them (`AFTER_CHILDREN`). */
+	private applyAfterChildren(): void {
+		for (const name of AFTER_CHILDREN[this.tag] ?? []) {
+			const value = this.resolved.attributes.get(name);
+			if (value !== undefined && r.Rwidget_get_child_count(this.id) > 0) {
+				this.setAttribute(name, value);
+			}
+		}
 	}
 
 	/**
@@ -850,6 +908,7 @@ export class WidgetInstance implements HostNode {
 			// (at its place, not at the end: making it ran user code, which may have added others after it)
 			if (this.holds(child)) {
 				r.Rwidget_insert_child(this.id, child.nativeWidget as r.Rid, this.placeAmongPlaced(child));
+				this.applyAfterChildren();
 			}
 		});
 	}
@@ -910,6 +969,7 @@ export class WidgetInstance implements HostNode {
 			this.make(child, () => {
 				if (this.holds(child)) {
 					r.Rwidget_insert_child(this.id, child.nativeWidget as r.Rid, this.placeAmongPlaced(child));
+					this.applyAfterChildren();
 				}
 			});
 		}

@@ -412,24 +412,38 @@ const measureEvent = new NativeEvent(r.Rcustom_set_measure_callback, (handlerOf)
 	}
 }));
 
+/** A function waiting for the next frame, with what makes it the one of its kind. */
+interface Waiting {
+	readonly key: string | null;
+	readonly run: () => void;
+}
+
 /**
  * Functions run at the start of the next frame, through `Rtask_post`: the events a widget gives
- * while Raven paints, when the tree must not change under it. One native callback for them all.
+ * while Raven paints, when the tree must not change under it. One native callback for them all,
+ * and one task of Raven for each function, which runs that one: in the order of the tasks of the
+ * application around them.
  */
 class NextFrame {
-	private readonly queue: Array<() => void> = [];
+	private readonly queue: Waiting[] = [];
 	private callback: NativeCallback | null = null;
 
-	/** Runs a function at the start of the next frame, after those posted before it. */
-	post(run: () => void): void {
-		this.queue.push(run);
-		this.callback ??= nativeCallback(["pointer"], "void", () => {
-			for (const each of this.queue.splice(0)) {
-				each();
-			}
-		});
-		// (one task each: a task Raven dropped, as at Rshutdown, leaves nothing waiting for a next post)
+	/**
+	 * Runs a function at the start of the next frame, after those posted before it. With a key, it is
+	 * not posted while one of that key waits: that one runs instead.
+	 */
+	post(run: () => void, key: string | null = null): void {
+		if (key !== null && this.queue.some((waiting) => waiting.key === key)) {
+			return;
+		}
+		this.queue.push({ key, run });
+		this.callback ??= nativeCallback(["pointer"], "void", () => this.queue.shift()?.run());
 		r.Rtask_post(this.callback, null);
+	}
+
+	/** Forgets what waits: Raven stopped, and dropped its tasks. */
+	clear(): void {
+		this.queue.length = 0;
 	}
 
 	/** How many functions wait, for the tests. */
@@ -440,24 +454,29 @@ class NextFrame {
 
 export const nextFrame = new NextFrame();
 
+/** Gives each event of `nextFrameEvent` a name of its own, for the key of what waits. */
+let nextFrameEvents = 0;
+
 /**
  * An event C may give while it paints, as a MapView whose zoom or glide ends in a frame: the
  * function is called at the start of the next frame, where what it changes cannot pull a widget
- * from under the paint. What the renderer causes is still not from the user.
+ * from under the paint. Once for the changes of a frame, with what the widget holds then (`read`):
+ * not a value it has already left, which a function that follows it would take it back to. What
+ * the renderer causes is still not from the user.
  */
-function nextFrameEvent(connect: Connect, args: readonly NativeArg[]): NativeEvent {
-	return new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", ...args], "void", (id, ...values) => {
+function nextFrameEvent(connect: Connect, args: readonly NativeArg[], read: (widget: r.Rid) => readonly number[]): NativeEvent {
+	const name = `event${++nextFrameEvents}`;
+	return new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", ...args], "void", (id) => {
 		if (eventScope.ignoring) {
 			return;
 		}
 		const widget = widgetOf(id);
-		const given = values.slice(0, args.length);
 		nextFrame.post(() => {
-			const handler = handlerOf(widget) as ((...values: NativeValue[]) => void) | undefined;
-			if (handler) {
-				eventScope.run(() => handler(...given), () => controlledSync.run(widget));
+			const handler = handlerOf(widget) as ((...values: number[]) => void) | undefined;
+			if (handler && r.Rwidget_is_valid(widget)) {
+				eventScope.run(() => handler(...read(widget)), () => controlledSync.run(widget));
 			}
-		});
+		}, `${name}:${widget}`);
 	}));
 }
 
@@ -540,7 +559,7 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 	},
 	MapView: {
 		// (also at the end of a zoom or of a glide, which C gives as it paints: a frame later here)
-		OnChanged: nextFrameEvent(r.Rmap_view_set_view_changed_callback, ["f64", "f64", "f64"]),
+		OnChanged: nextFrameEvent(r.Rmap_view_set_view_changed_callback, ["f64", "f64", "f64"], (map) => [...r.Rmap_view_get_center(map), r.Rmap_view_get_zoom(map)]),
 		// (the id of the marker, from 1: those of Markup in their order, then those Rmap_view_add_marker adds)
 		OnMarkerClicked: indexEvent(r.Rmap_view_set_marker_clicked_callback),
 		// (asked as the map is drawn: answered with Rmap_view_set_tile, at once or later. Giving or

@@ -1231,6 +1231,26 @@ test("a Table and a ListView of rows asked for as they are drawn take a Selected
 	expect(r.Rlist_view_get_selected(find("l"))).toBe(2);
 });
 
+test("a Table that selects several rows takes a Selected given before its rows once they come, then keeps the user's", async () => {
+	const table = createRef<WidgetInstance>();
+	function Rows({ count }: { count: number }): ReactNode {
+		return <VBox><Table ref={table} Name="t" Height={200} Columns={["A"]} RowCount={count} CellText={(row) => `row ${row}`} MultiSelect Selected={2} OnChanged={() => {}} /></VBox>;
+	}
+	await mount(<Rows count={0} />);
+	expect(r.Rtable_get_selected(find("t"))).toBe(-1);
+	root?.render(<Rows count={4} />);
+	await settle();
+	expect(r.Rtable_get_selected(find("t"))).toBe(2);
+	// (taken: the rows the user selects stay when the rows change)
+	table.current?.focus();
+	press(r.R_KEY_DOWN, r.R_MOD_SHIFT);
+	await settle();
+	expect(r.Rtable_get_selection_count(find("t"))).toBe(2);
+	root?.render(<Rows count={5} />);
+	await settle();
+	expect(r.Rtable_get_selection_count(find("t"))).toBe(2);
+});
+
 test("a Table that selects several rows keeps the user's rows after an event, whatever Selected says", async () => {
 	const changes: number[] = [];
 	const table = createRef<WidgetInstance>();
@@ -1451,12 +1471,80 @@ test("a MapView whose glide ends as it paints says so at the next frame, where t
 	}
 });
 
-test("a MapView moves for a change of place smaller than the tolerance of other numbers: pixels at a high zoom", async () => {
-	function Place({ longitude }: { longitude: number }): ReactNode {
-		return <VBox><MapView Name="map" Height={120} MaxZoom={24} Zoom={24} Longitude={longitude} /></VBox>;
+test("a MapView takes its place and zoom in double precision, for a change smaller than the tolerance of other numbers", async () => {
+	function Place({ longitude, latitude, zoom }: { longitude: number; latitude: number; zoom: number }): ReactNode {
+		return <VBox><MapView Name="map" Height={120} MaxZoom={24} Zoom={zoom} Latitude={latitude} Longitude={longitude} /></VBox>;
 	}
-	await mount(<Place longitude={0} />);
-	root?.render(<Place longitude={0.000005} />);
+	await mount(<Place longitude={100} latitude={45} zoom={24} />);
+	// (pixels at zoom 24: a float, as the attributes of Raven 0.3.0 read them, would keep 100 and 45)
+	root?.render(<Place longitude={100.000001} latitude={45.0000013} zoom={23.0000001} />);
 	await settle();
-	expect(r.Rmap_view_get_center(find("map"))[1]).toBeCloseTo(0.000005, 9);
+	const [latitude, longitude] = r.Rmap_view_get_center(find("map"));
+	expect(longitude).toBeCloseTo(100.000001, 9);
+	expect(latitude).toBeCloseTo(45.0000013, 9);
+	expect(r.Rmap_view_get_zoom(find("map"))).toBeCloseTo(23.0000001, 12);
+	// (the other coordinate stays: only Longitude changes)
+	root?.render(<Place longitude={100.000002} latitude={45.0000013} zoom={23.0000001} />);
+	await settle();
+	expect(r.Rmap_view_get_center(find("map"))[0]).toBeCloseTo(45.0000013, 9);
 });
+
+test("what waits for the next frame runs in the order of the tasks of the application around it", async () => {
+	const order: string[] = [];
+	nextFrame.post(() => order.push("first"));
+	r.Rtask_post(() => void order.push("the application's"));
+	nextFrame.post(() => order.push("last"));
+	r.Rdraw_frame();
+	expect(order).toEqual(["first", "the application's", "last"]);
+	expect(nextFrame.size).toBe(0);
+});
+
+test("a MapView says once a frame where it is, as it is when it is said: not a place it has left", async () => {
+	const views: number[][] = [];
+	await mount(<VBox><MapView Name="map" Height={240} Zoom={3} OnChanged={(latitude, longitude, zoom) => views.push([latitude, longitude, zoom])} /></VBox>);
+	const map = find("map");
+	const [x, y, width, height] = r.Rwidget_get_rect(map);
+	// (a drag of several moves in one frame: C says each, the function hears the last)
+	r.Rwindow_inject_mouse_move(window, x + width / 2, y + height / 2);
+	r.Rwindow_inject_mouse_button(window, r.R_MOUSE_LEFT, 1);
+	for (let step = 1; step <= 5; step++) {
+		r.Rwindow_inject_mouse_move(window, x + width / 2 + step * 10, y + height / 2);
+	}
+	r.Rwindow_inject_mouse_button(window, r.R_MOUSE_LEFT, 0);
+	expect(nextFrame.size).toBe(1);
+	// (and moved elsewhere before the next frame, by the application: that is where it is)
+	r.Rmap_view_set_center(map, 0, 42);
+	r.Rdraw_frame();
+	expect(views.length).toBe(1);
+	expect(views[0]?.[1]).toBeCloseTo(r.Rmap_view_get_center(map)[1], 9);
+	expect(views[0]?.[1]).toBeCloseTo(42, 9);
+});
+
+test("a Carousel shows the Page of its props from the start, after a remake, and once the page comes", async () => {
+	function Pages({ count, page, loop }: { count: number; page: number; loop?: boolean }): ReactNode {
+		return (
+			<VBox>
+				<Carousel Name="c" Height={120} Page={page} {...(loop === undefined ? {} : { Loop: loop })}>
+					{Array.from({ length: count }, (_, index) => <Label key={index}>{`page ${index}`}</Label>)}
+				</Carousel>
+			</VBox>
+		);
+	}
+	await mount(<Pages count={3} page={1} />);
+	expect(r.Rcarousel_get_page(find("c"))).toBe(1);
+	// (a remake, as an attribute goes: the new widget gets its pages, then the page)
+	root?.render(<Pages count={3} page={2} loop />);
+	await settle();
+	root?.render(<Pages count={3} page={2} />);
+	await settle();
+	expect(r.Rcarousel_get_page(find("c"))).toBe(2);
+	// (a page asked for before it is there is shown when it comes)
+	root?.render(<Pages count={1} page={0} />);
+	await settle();
+	root?.render(<Pages count={1} page={2} />);
+	await settle();
+	root?.render(<Pages count={3} page={2} />);
+	await settle();
+	expect(r.Rcarousel_get_page(find("c"))).toBe(2);
+});
+
