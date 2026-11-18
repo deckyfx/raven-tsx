@@ -49,7 +49,7 @@ function project(sourceSolid: string, rendererSolid: string): string {
 }
 
 /** Builds the project's source with the plugin, and gives what failed, or "" when it built. */
-async function build(root: string, options: { readonly external?: string[]; readonly packages?: "bundle" | "external" } = {}): Promise<string> {
+async function build(root: string, options: Pick<Bun.BuildConfig, "external" | "packages" | "loader"> = {}): Promise<string> {
 	try {
 		const result = await Bun.build({ entrypoints: [join(root, "src", "app.tsx")], plugins: [solidPlugin()], ...options });
 		return result.success ? "" : result.logs.map((log) => log.message).join("\n");
@@ -110,4 +110,14 @@ test("a file of another package named solid/renderer is not checked", async () =
 	solidPackage(join(root, "lib", "raven-tsx", "node_modules", "solid-js"), "2.0.1");
 	write(join(root, "src", "app.tsx"), `import { mine } from "../lib/raven-tsx/src/solid/renderer.js";\nexport const app = () => <label>{mine}</label>;\n`);
 	expect(await build(root)).toBe("");
+});
+
+test("a file named renderer that is not this package's keeps the loader the build gives its extension", async () => {
+	const root = project("1.9.19", "1.9.19");
+	// (not JavaScript: read as text, as the build says of .cjs)
+	write(join(root, "src", "renderer.cjs"), "plain words, not { JavaScript\n");
+	write(join(root, "src", "app.tsx"), `import words from "./renderer.cjs";\nexport const app = () => <label>{words}</label>;\n`);
+	expect(await build(root, { loader: { ".cjs": "text" } })).toBe("");
+	// (and without that setting, it is JavaScript, which these words are not)
+	expect(await build(root)).not.toBe("");
 });

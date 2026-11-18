@@ -11,7 +11,7 @@
 
 import type { BunPlugin } from "bun";
 import { readFileSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, extname, resolve, sep } from "node:path";
 import { assertSolidVersion, installedPackage, isRendererFile, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
@@ -98,8 +98,9 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 				if (isRendererFile(path)) {
 					assertSolidFrom(dirname(path));
 				}
-				// (as it is, with the loader Bun would take: a hook of Bun's onLoad cannot pass a file on)
-				return { contents: readFileSync(path, "utf8"), loader: /\.[cm]?ts$/.test(path) ? "ts" : "js" };
+				// (as it is, with the loader Bun would take, the build's own for this extension first: a hook of
+				// Bun's onLoad cannot pass a file on)
+				return { contents: readFileSync(path, "utf8"), loader: build.config?.loader?.[extname(path)] ?? (/\.[cm]?ts$/.test(path) ? "ts" : "js") };
 			});
 			// (Bun runs no onResolve of a plugin for a package: the server's file is read as the client's)
 			build.onLoad({ filter: /[\\/]solid-js[\\/].*server\.c?js$/ }, ({ path }) => {
