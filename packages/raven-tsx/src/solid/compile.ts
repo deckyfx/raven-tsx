@@ -8,8 +8,7 @@
 
 import type { PluginItem, TransformOptions } from "@babel/core";
 import { readFileSync, realpathSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The major version of Solid this package is written for: its renderer, its compiler. */
@@ -148,21 +147,10 @@ export function applicationFolder(entry: string | undefined, cwd: string, preser
 			// unless the runtime is told to keep the link, as --preserve-symlinks-main tells Node.js)
 			return dirname(preserveSymlinks ? entry : realpathSync(entry));
 		}
-		// (a folder runs its main file, which may be deeper and see other packages: `dist/index.cjs`;
-		// found through the link when the runtime keeps it)
-		try {
-			if (preserveSymlinks) {
-				// (as written in the folder's package.json, links kept, the main file one too)
-				const written = logicalMain(entry);
-				if (written) {
-					return dirname(written);
-				}
-			}
-			const main = createRequire(join(entry, "index.js")).resolve(entry);
-			return dirname(preserveSymlinks ? join(entry, relative(realpathSync(entry), main)) : main);
-		} catch {
-			return entry;
-		}
+		// (a folder runs its main file, which may be deeper and see other packages: `dist/index.cjs`.
+		// Under its own path when the runtime keeps links, else where they lead)
+		const main = folderMain(entry);
+		return main === undefined ? entry : dirname(preserveSymlinks ? main : realpathSync(main));
 	} catch {
 		// (an entry that cannot be looked at, as a loop of links: the working directory)
 		return cwd;
@@ -170,20 +158,19 @@ export function applicationFolder(entry: string | undefined, cwd: string, preser
 }
 
 /**
- * The main file of a folder as its package.json names it, under the folder's own path (links kept),
- * when that file is there: `main`, or with `.js` or `.cjs` added, as Node.js tries them.
+ * The file Node.js runs for a folder, under the folder's own path (links kept), as its documented
+ * steps go: `main` of its package.json, with `.js`, as a folder with `index.js`, then the folder's
+ * own `index.js`. Only files of JavaScript: an application is not `.json` or `.node`.
  */
-function logicalMain(folder: string): string | undefined {
+function folderMain(folder: string): string | undefined {
 	let main: unknown;
 	try {
 		main = (JSON.parse(readFileSync(join(folder, "package.json"), "utf8")) as { readonly main?: unknown }).main;
 	} catch {
-		return undefined;
+		main = undefined;
 	}
-	if (typeof main !== "string" || main === "") {
-		return undefined;
-	}
-	return [join(folder, main), join(folder, `${main}.js`), join(folder, `${main}.cjs`)].find((path) => statSync(path, { throwIfNoEntry: false })?.isFile());
+	const candidates = typeof main === "string" && main !== "" ? [join(folder, main), join(folder, `${main}.js`), join(folder, main, "index.js")] : [];
+	return [...candidates, join(folder, "index.js")].find((path) => statSync(path, { throwIfNoEntry: false })?.isFile());
 }
 
 /** Whether Node.js keeps the link of its main file: `--preserve-symlinks-main` on its command line or in NODE_OPTIONS. */

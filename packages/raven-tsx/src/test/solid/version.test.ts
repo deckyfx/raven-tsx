@@ -117,6 +117,19 @@ test.skipIf(!canLink())("an entry that is a link counts where it leads, unless t
 		symlinkSync(join(root, "shared", "start.cjs"), join(root, "app2", "dist", "start.cjs"));
 		expect(applicationFolder(join(root, "app2"), "/somewhere", true)).toBe(join(root, "app2", "dist"));
 		expect(applicationFolder(join(root, "app2"), "/somewhere")).toBe(join(root, "shared"));
+		// (main naming a folder: its index, not a file of the same name with .cjs, which Node.js does not try)
+		mkdirSync(join(root, "app3", "dist"), { recursive: true });
+		writeFileSync(join(root, "app3", "package.json"), JSON.stringify({ name: "app3", main: "dist" }));
+		writeFileSync(join(root, "app3", "dist", "index.js"), "");
+		writeFileSync(join(root, "app3", "dist.cjs"), "");
+		expect(applicationFolder(join(root, "app3"), "/somewhere", true)).toBe(join(root, "app3", "dist"));
+		expect(applicationFolder(join(root, "app3"), "/somewhere")).toBe(join(root, "app3", "dist"));
+		// (an index that is a link, as the fallback: kept when links are, else where it leads)
+		mkdirSync(join(root, "app4"));
+		writeFileSync(join(root, "app4", "package.json"), JSON.stringify({ name: "app4", main: "missing" }));
+		symlinkSync(join(root, "shared", "start.cjs"), join(root, "app4", "index.js"));
+		expect(applicationFolder(join(root, "app4"), "/somewhere", true)).toBe(join(root, "app4"));
+		expect(applicationFolder(join(root, "app4"), "/somewhere")).toBe(join(root, "shared"));
 		// (an entry that cannot be looked at, a loop of links: the working directory)
 		symlinkSync(join(root, "loop"), join(root, "loop"));
 		expect(applicationFolder(join(root, "loop"), "/somewhere")).toBe("/somewhere");
