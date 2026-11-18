@@ -47,7 +47,7 @@ type IndexAndFlagHandler = (index: number, flag: boolean) => void;
 class EventScope {
 	private flush: () => void = () => {};
 	private wrap: (run: () => void) => void = (run) => run();
-	private ignoring = 0;
+	private ignoringDepth = 0;
 
 	/** Gives the function that commits pending updates: an adapter says how, for its framework. */
 	setFlush(flush: () => void): void {
@@ -59,13 +59,18 @@ class EventScope {
 		this.wrap = wrap;
 	}
 
+	/** Whether a change made by the renderer is running, whose events are not from the user. */
+	get ignoring(): boolean {
+		return this.ignoringDepth > 0;
+	}
+
 	/** Runs a change made by the renderer: an event it causes is not from the user. */
 	ignoringEvents(change: () => void): void {
-		this.ignoring++;
+		this.ignoringDepth++;
 		try {
 			change();
 		} finally {
-			this.ignoring--;
+			this.ignoringDepth--;
 		}
 	}
 
@@ -83,7 +88,7 @@ class EventScope {
 
 	/** Runs a handler of the user, and commits what it changed. */
 	run(handler: () => void, afterwards?: () => void): void {
-		if (this.ignoring > 0) {
+		if (this.ignoringDepth > 0) {
 			return;
 		}
 		this.wrap(() => {
@@ -408,6 +413,55 @@ const measureEvent = new NativeEvent(r.Rcustom_set_measure_callback, (handlerOf)
 }));
 
 /**
+ * Functions run at the start of the next frame, through `Rtask_post`: the events a widget gives
+ * while Raven paints, when the tree must not change under it. One native callback for them all.
+ */
+class NextFrame {
+	private readonly queue: Array<() => void> = [];
+	private callback: NativeCallback | null = null;
+
+	/** Runs a function at the start of the next frame, after those posted before it. */
+	post(run: () => void): void {
+		this.queue.push(run);
+		this.callback ??= nativeCallback(["pointer"], "void", () => {
+			for (const each of this.queue.splice(0)) {
+				each();
+			}
+		});
+		// (one task each: a task Raven dropped, as at Rshutdown, leaves nothing waiting for a next post)
+		r.Rtask_post(this.callback, null);
+	}
+
+	/** How many functions wait, for the tests. */
+	get size(): number {
+		return this.queue.length;
+	}
+}
+
+export const nextFrame = new NextFrame();
+
+/**
+ * An event C may give while it paints, as a MapView whose zoom or glide ends in a frame: the
+ * function is called at the start of the next frame, where what it changes cannot pull a widget
+ * from under the paint. What the renderer causes is still not from the user.
+ */
+function nextFrameEvent(connect: Connect, args: readonly NativeArg[]): NativeEvent {
+	return new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", ...args], "void", (id, ...values) => {
+		if (eventScope.ignoring) {
+			return;
+		}
+		const widget = widgetOf(id);
+		const given = values.slice(0, args.length);
+		nextFrame.post(() => {
+			const handler = handlerOf(widget) as ((...values: NativeValue[]) => void) | undefined;
+			if (handler) {
+				eventScope.run(() => handler(...given), () => controlledSync.run(widget));
+			}
+		});
+	}));
+}
+
+/**
  * An event C calls while a frame is drawn, as a MapView asks for its tiles: what it gives as it is,
  * and nothing committed after it, as for `OnPaint`. `args` are the types after the widget.
  */
@@ -485,7 +539,8 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 		OnCellClicked: directEvent(r.Rchart_set_cell_clicked_callback, ["i32", "i32", "f32"]),
 	},
 	MapView: {
-		OnChanged: directEvent(r.Rmap_view_set_view_changed_callback, ["f64", "f64", "f64"]),
+		// (also at the end of a zoom or of a glide, which C gives as it paints: a frame later here)
+		OnChanged: nextFrameEvent(r.Rmap_view_set_view_changed_callback, ["f64", "f64", "f64"]),
 		// (the id of the marker, from 1: those of Markup in their order, then those Rmap_view_add_marker adds)
 		OnMarkerClicked: indexEvent(r.Rmap_view_set_marker_clicked_callback),
 		// (asked as the map is drawn: answered with Rmap_view_set_tile, at once or later. Giving or

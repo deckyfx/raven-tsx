@@ -118,6 +118,11 @@ const twoDigits = (value: number): string => String(value).padStart(2, "0");
 const flagText = (value: number): string => (value ? "true" : "false");
 /** A text is that text: "1.0" is not "1", which is what makes a number the same as another. */
 const sameText = (held: string, wanted: string): boolean => held === wanted;
+/**
+ * The same number, exactly: a place on a map, where what the general tolerance lets pass is
+ * pixels at a high zoom. (what OnChanged gives is what the widget reads back, to the last bit)
+ */
+const sameNumber = (held: string, wanted: string): boolean => held !== "" && wanted !== "" && Number(held) === Number(wanted);
 /** A code of a color, in either case. */
 const sameColor = (held: string, wanted: string): boolean => held.toLowerCase() === wanted.toLowerCase();
 
@@ -152,9 +157,9 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	// (the view is the user's, as that of a NodeGraph: OnChanged says where it went, and a click on a
 	// marker must not take it back to the props)
 	MapView: [
-		{ attribute: "Latitude", read: (widget) => numberText(r.Rmap_view_get_center(widget)[0]), unreported: true },
-		{ attribute: "Longitude", read: (widget) => numberText(r.Rmap_view_get_center(widget)[1]), unreported: true },
-		{ attribute: "Zoom", read: (widget) => numberText(r.Rmap_view_get_zoom(widget)), unreported: true },
+		{ attribute: "Latitude", read: (widget) => numberText(r.Rmap_view_get_center(widget)[0]), same: sameNumber, unreported: true },
+		{ attribute: "Longitude", read: (widget) => numberText(r.Rmap_view_get_center(widget)[1]), same: sameNumber, unreported: true },
+		{ attribute: "Zoom", read: (widget) => numberText(r.Rmap_view_get_zoom(widget)), same: sameNumber, unreported: true },
 	],
 	PdfView: [
 		// (counted from 1, as the attribute is written; C counts from 0. Without a document, a page asked

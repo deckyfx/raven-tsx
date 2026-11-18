@@ -187,7 +187,7 @@ export async function buildAddon(checkout: string): Promise<string | undefined> 
 	}
 	const addon = built();
 	if (!addon) {
-		console.warn(`no ${ADDON_FILE} built (Windows, or no node_api.h): the package of this platform works on Bun only`);
+		console.warn(`no ${ADDON_FILE} built (no Node.js, or no node_api.h, or on Windows no node.lib it could download): the package of this platform works on Bun only`);
 	}
 	return addon;
 }

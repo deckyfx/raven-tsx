@@ -5,7 +5,7 @@ import { ptr, type Pointer } from "bun:ffi";
 import { tmpdir } from "node:os";
 import { createContext, createRef, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import * as r from "../../core/raven";
-import { eventStats } from "../../core/events";
+import { eventStats, nextFrame } from "../../core/events";
 import {
 	BlockEditor, Button, Carousel, Chart, ColorPicker, createPortal, createWindow, Custom, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
 	type WidgetInstance, type WindowInstance,
@@ -1414,4 +1414,49 @@ test("a MapView asks for its tiles as it is drawn, says its marker clicked, and 
 	await settle();
 	expect(markers).toEqual([2, 2]);
 	expect(r.Rmap_view_get_center(map)[1]).toBeCloseTo(moved, 5);
+});
+
+test("a MapView whose glide ends as it paints says so at the next frame, where the tree may change", async () => {
+	const views: number[] = [];
+	function Glide(): ReactNode {
+		const [after, setAfter] = useState(true);
+		return (
+			<VBox>
+				<MapView Name="map" Height={200} Zoom={1} OnChanged={(_latitude, _longitude, zoom) => { views.push(zoom); setAfter(false); }} />
+				{after && <Label Name="after">painted after the map</Label>}
+			</VBox>
+		);
+	}
+	await mount(<Glide />);
+	const map = find("map");
+	r.Rset_animations_enabled(1);
+	try {
+		r.Rmap_view_animate_to(map, 10, 20, 3);
+		// (frame after frame until C gives the end of the glide as it paints: the function waits)
+		const end = performance.now() + 3000;
+		while (nextFrame.size === 0 && performance.now() < end) {
+			r.Rdraw_frame();
+			await new Promise<void>((resolve) => setTimeout(resolve, 4));
+		}
+		expect(nextFrame.size).toBeGreaterThan(0);
+		expect(views).toEqual([]);
+		expect(r.Rwidget_is_valid(find("after"))).toBe(1);
+		// (the next frame calls it, before it paints: the label goes, and nothing paints it)
+		r.Rdraw_frame();
+		expect(views.length).toBeGreaterThan(0);
+		await settle();
+		expect(find("after")).toBe(r.R_INVALID_ID);
+	} finally {
+		r.Rset_animations_enabled(0);
+	}
+});
+
+test("a MapView moves for a change of place smaller than the tolerance of other numbers: pixels at a high zoom", async () => {
+	function Place({ longitude }: { longitude: number }): ReactNode {
+		return <VBox><MapView Name="map" Height={120} MaxZoom={24} Zoom={24} Longitude={longitude} /></VBox>;
+	}
+	await mount(<Place longitude={0} />);
+	root?.render(<Place longitude={0.000005} />);
+	await settle();
+	expect(r.Rmap_view_get_center(find("map"))[1]).toBeCloseTo(0.000005, 9);
 });
