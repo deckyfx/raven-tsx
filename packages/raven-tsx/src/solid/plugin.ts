@@ -10,9 +10,10 @@
  */
 
 import type { BunPlugin } from "bun";
-import { readFileSync } from "node:fs";
-import { resolve, sep } from "node:path";
-import { isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+import { readFileSync, realpathSync } from "node:fs";
+import { dirname, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { assertSolidVersion, installedPackage, isRendererFile, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
 export interface SolidPluginOptions {
@@ -70,18 +71,67 @@ function clientFilesOf(root: string, development: boolean): ReadonlyMap<string, 
 /** The folder of the solid-js package a file of it is in. */
 const solidRoot = (path: string): string => path.slice(0, path.lastIndexOf(`${sep}solid-js${sep}`) + `${sep}solid-js`.length);
 
+/** Files that may be the renderer of this package; `isRendererFile` tells which is. */
+const RENDERER_FILE = /[\\/]renderer\.[cm]?[jt]s$/;
+
+/** The real path of this package's renderer beside the plugin, or nothing when it is not there. */
+function rendererPath(): string | undefined {
+	try {
+		return realpathSync(fileURLToPath(new URL("./renderer.ts", import.meta.url)));
+	} catch {
+		return undefined;
+	}
+}
+
 /** The plugin: compiles TSX for Solid, and takes Solid's build for clients. */
 export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 	const development = options.development ?? false;
+	// (the compiler is the one the plugin loads, from where it is installed)
+	assertSolidVersion({ preset: installedPackage("babel-preset-solid") });
 	return {
 		name: "raven-tsx-solid",
 		setup(build) {
+			// (the Solid of what is compiled, from the folder of each source: that of the application,
+			// which a build may hold in another installation than the plugin's; looked up again by each
+			// build, as Solid may have changed between two)
+			const checkedFolders = new Set<string>();
+			const assertSolidFrom = (folder: string): void => {
+				if (!checkedFolders.has(folder)) {
+					assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, folder), folder) });
+					checkedFolders.add(folder);
+				}
+			};
+			// (the renderer of this package, when it is loaded: its own solid-js, which may be another copy
+			// than the sources'. A renderer the build leaves out, however it does, is never loaded here, and
+			// the place it runs in resolves it)
+			if (build.config) {
+				// (a build: any file named renderer, checked when it is this package's, then left to Bun and
+				// the other plugins, with the loader they give it)
+				build.onLoad({ filter: RENDERER_FILE }, ({ path }) => {
+					if (isRendererFile(path)) {
+						assertSolidFrom(dirname(path));
+					}
+					return undefined;
+				});
+			} else {
+				// (at run time a hook must give the contents: only this package's own renderer is taken. The
+				// preload has checked its solid-js already; this checks it again when it is loaded)
+				const renderer = rendererPath();
+				if (renderer) {
+					build.onLoad({ filter: new RegExp(`^${renderer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }, ({ path }) => {
+						assertSolidFrom(dirname(path));
+						return { contents: readFileSync(path, "utf8"), loader: "ts" };
+					});
+				}
+			}
 			// (Bun runs no onResolve of a plugin for a package: the server's file is read as the client's)
 			build.onLoad({ filter: /[\\/]solid-js[\\/].*server\.c?js$/ }, ({ path }) => {
 				const client = clientFilesOf(solidRoot(path), development).get(path);
 				return { contents: readFileSync(client ?? path, "utf8"), loader: "js" };
 			});
 			build.onLoad({ filter: options.filter ?? SOURCES }, async ({ path }) => {
+				// (before the source runs and imports Solid: a Solid 2 would fail there without saying why)
+				assertSolidFrom(dirname(path));
 				// (loaded here, so that an application of React never needs Babel)
 				const [{ transformAsync }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);
 				// (the types stay, for Bun to take away: Babel only compiles the JSX)
