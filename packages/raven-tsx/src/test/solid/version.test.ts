@@ -21,16 +21,20 @@ test("a Solid 2 is named, with what to install instead", () => {
 	const problem = solidVersionProblem({ solid: "2.0.1", preset: "1.9.19" });
 	expect(problem).toContain("solid-js 2.0.1");
 	expect(problem).not.toContain("babel-preset-solid 1.9.19");
-	expect(problem).toContain("npm install solid-js@1 && npm install -D babel-preset-solid@1");
-	expect(problem).toContain("bun add solid-js@1 && bun add -d babel-preset-solid@1");
-	// (Babel 7 too: npm's latest is Babel 8, which babel-preset-solid 1 does not take)
-	expect(problem).toContain("npm install -D babel-preset-solid@1 @babel/core@7");
-	expect(problem).toContain("bun add -d babel-preset-solid@1 @babel/core@7");
+	expect(problem).toContain("Install Solid 1 in the project that installs it: npm install solid-js@1 (bun add solid-js@1).");
+	// (only the command for what is wrong: the compiler may be in another project)
+	expect(problem).not.toContain("babel-preset-solid@1");
 });
 
-test("the compiler of Solid 2 is named too, alone or with Solid 2", () => {
-	expect(solidVersionProblem({ solid: "1.9.19", preset: "2.0.0-rc.2" })).toContain("not babel-preset-solid 2.0.0-rc.2.");
-	expect(solidVersionProblem({ solid: "2.0.1", preset: "2.0.0-rc.2" })).toContain("not solid-js 2.0.1 and babel-preset-solid 2.0.0-rc.2.");
+test("the compiler of Solid 2 is named too, alone or with Solid 2, each with its command", () => {
+	const preset = solidVersionProblem({ solid: "1.9.19", preset: "2.0.0-rc.2" });
+	expect(preset).toContain("not babel-preset-solid 2.0.0-rc.2.");
+	// (Babel 7 with it: npm's latest is Babel 8, which babel-preset-solid 1 does not take)
+	expect(preset).toContain("installs it: npm install -D babel-preset-solid@1 @babel/core@7 (bun add -d babel-preset-solid@1 @babel/core@7).");
+	expect(preset).not.toContain("solid-js@1");
+	const both = solidVersionProblem({ solid: "2.0.1", preset: "2.0.0-rc.2" });
+	expect(both).toContain("not solid-js 2.0.1 and babel-preset-solid 2.0.0-rc.2.");
+	expect(both).toContain("installs each: npm install solid-js@1 (bun add solid-js@1); npm install -D babel-preset-solid@1 @babel/core@7");
 });
 
 test("the installed versions are those this package finds", () => {

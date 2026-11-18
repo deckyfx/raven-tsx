@@ -38,21 +38,27 @@ const versionOf = (found: string | InstalledPackage): string => (typeof found ==
  * with "Cannot find module", which does not say why.
  */
 export function solidVersionProblem(versions: SolidVersions): string | undefined {
-	const wrong: string[] = [];
-	for (const [name, found] of [["solid-js", versions.solid], ["babel-preset-solid", versions.preset]] as const) {
-		if (found !== undefined && Number.parseInt(versionOf(found), 10) !== SOLID_MAJOR) {
-			// (with the folder it is in, when known: in a workspace, the project to change is the one that installs it)
-			wrong.push(`${name} ${versionOf(found)}${typeof found === "string" ? "" : ` (${found.folder})`}`);
+	// (each with the folder it is in, when known: in a workspace, the project to change is the one
+	// that installs it; and only the command for what is wrong, as the compiler may be in another)
+	const install = {
+		"solid-js": `npm install solid-js@${SOLID_MAJOR} (bun add solid-js@${SOLID_MAJOR})`,
+		"babel-preset-solid": `npm install -D babel-preset-solid@${SOLID_MAJOR} @babel/core@7 (bun add -d babel-preset-solid@${SOLID_MAJOR} @babel/core@7)`,
+	} as const;
+	const found: string[] = [];
+	const commands: string[] = [];
+	for (const [name, installed] of [["solid-js", versions.solid], ["babel-preset-solid", versions.preset]] as const) {
+		if (installed !== undefined && Number.parseInt(versionOf(installed), 10) !== SOLID_MAJOR) {
+			found.push(`${name} ${versionOf(installed)}${typeof installed === "string" ? "" : ` (${installed.folder})`}`);
+			commands.push(install[name]);
 		}
 	}
-	if (wrong.length === 0) {
+	if (found.length === 0) {
 		return undefined;
 	}
-	const found = wrong.join(" and ");
 	return (
-		`raven-tsx: @decky.fx/raven-tsx/solid supports Solid ${SOLID_MAJOR}, not ${found}. ` +
-		`Install Solid ${SOLID_MAJOR} in the project that installs it: npm install solid-js@${SOLID_MAJOR} && npm install -D babel-preset-solid@${SOLID_MAJOR} @babel/core@7 ` +
-		`(bun add solid-js@${SOLID_MAJOR} && bun add -d babel-preset-solid@${SOLID_MAJOR} @babel/core@7). Solid 2 comes in a later version of raven-tsx.`
+		`raven-tsx: @decky.fx/raven-tsx/solid supports Solid ${SOLID_MAJOR}, not ${found.join(" and ")}. ` +
+		`Install Solid ${SOLID_MAJOR} in the project that installs ${found.length > 1 ? "each" : "it"}: ${commands.join("; ")}. ` +
+		`Solid 2 comes in a later version of raven-tsx.`
 	);
 }
 
