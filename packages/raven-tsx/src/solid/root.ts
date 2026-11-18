@@ -98,6 +98,12 @@ export interface RunOptions {
 	readonly setup?: (() => void) | undefined;
 	/** Raven's allocator: functions of C only, as it allocates on several threads. See `Rset_allocator`. */
 	readonly allocator?: Parameters<typeof r.Rset_allocator>[0] | undefined;
+	/**
+	 * What draws: Raven's default by default, Metal on macOS and Vulkan elsewhere.
+	 * `R_BACKEND_VULKAN` for what Metal cannot run: a Vulkan `Viewport`, effects given as SPIR-V
+	 * (`Rshader_create`). On macOS it then needs MoltenVK.
+	 */
+	readonly backend?: r.RBackend | undefined;
 }
 
 /**
@@ -115,7 +121,7 @@ export async function runApp(code: () => JSX.Element, options?: WindowOptions, s
 		r.Rset_allocator(start.allocator);
 	}
 	const desc = new r.RInitDesc();
-	desc.backend = r.R_BACKEND_VULKAN;
+	desc.backend = start?.backend ?? r.R_BACKEND_DEFAULT;
 	desc.app_name = start?.appName ?? null;
 	if (!r.Rinit_ex(desc)) {
 		RavenError.fromLibrary("Raven cannot start");

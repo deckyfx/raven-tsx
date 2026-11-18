@@ -83,5 +83,7 @@ function App(): ReactNode {
 
 await runApp(<App />, { Title: "Raven effects", Width: 1180, Height: 720 }, {
 	appName: "Raven effects",
+	// (its own effects are SPIR-V, which Metal cannot run: on macOS this needs MoltenVK)
+	backend: raven.R_BACKEND_VULKAN,
 	setup: () => raven.Rtheme_apply(raven.R_THEME_DARK),
 });

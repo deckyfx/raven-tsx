@@ -408,6 +408,19 @@ const measureEvent = new NativeEvent(r.Rcustom_set_measure_callback, (handlerOf)
 }));
 
 /**
+ * An event C calls while a frame is drawn, as a MapView asks for its tiles: what it gives as it is,
+ * and nothing committed after it, as for `OnPaint`. `args` are the types after the widget.
+ */
+function drawnEvent(connect: Connect, args: readonly NativeArg[]): NativeEvent {
+	return new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", ...args], "void", (id, ...values) => {
+		const handler = handlerOf(widgetOf(id)) as ((...values: NativeValue[]) => void) | undefined;
+		if (handler) {
+			eventScope.guard(() => handler(...values.slice(0, args.length)));
+		}
+	}));
+}
+
+/**
  * The events with a value, by tag. `OnClicked`, `OnChanged`, `OnCommitted` and `OnActivated`
  * as XML attributes all set the one action of a widget, without a value, and for a TextInput
  * it only fires on Enter. These callbacks fire at each change, with the value.
@@ -464,6 +477,22 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 		OnSeriesToggled: indexAndFlagEvent(r.Rplot_set_series_toggled_callback),
 	},
 	Breadcrumb: { OnClicked: indexEvent(r.Rbreadcrumb_set_clicked_callback) },
+	// (the page from 0, as the attribute Page counts it; the user's, or the autoplay's)
+	Carousel: { OnChanged: indexEvent(r.Rcarousel_set_page_changed_callback) },
+	// (OnClicked, the action of either, says nothing of which: these do)
+	Chart: {
+		OnSliceClicked: indexAndFlagEvent(r.Rchart_set_slice_clicked_callback),
+		OnCellClicked: directEvent(r.Rchart_set_cell_clicked_callback, ["i32", "i32", "f32"]),
+	},
+	MapView: {
+		OnChanged: directEvent(r.Rmap_view_set_view_changed_callback, ["f64", "f64", "f64"]),
+		// (the id of the marker, from 1: those of Markup in their order, then those Rmap_view_add_marker adds)
+		OnMarkerClicked: indexEvent(r.Rmap_view_set_marker_clicked_callback),
+		// (asked as the map is drawn: answered with Rmap_view_set_tile, at once or later. Giving or
+		// taking this prop away empties the tiles the map holds, as C does when its source changes)
+		OnTile: drawnEvent(r.Rmap_view_set_tile_callback, ["i32", "i32", "i32"]),
+		OnTileCancelled: drawnEvent(r.Rmap_view_set_tile_cancel_callback, ["i32", "i32", "i32"]),
+	},
 	Toast: { OnClicked: toastActionEvent },
 	TextEditor: {
 		OnChanged: readEvent(r.Rtext_editor_set_changed_callback, [], (widget) => r.Rtext_editor_get_text(widget) ?? ""),
@@ -626,6 +655,8 @@ export const EVENT_VALUE_TYPES: Readonly<Record<string, Readonly<Record<string, 
 	Rating: { OnChanged: "number" },
 	Pagination: { OnChanged: "number" },
 	PdfView: { OnChanged: "number" },
+	Carousel: { OnChanged: "number" },
+	MapView: { OnChanged: "latitude: number, longitude: number, zoom: number" },
 	Plot: { OnChanged: "line: number, value: number" },
 	Breadcrumb: { OnClicked: "number" },
 	TextEditor: { OnChanged: "string" },
@@ -737,6 +768,17 @@ export const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
 		"readonly OnCanvasActivated?: (x: number, y: number) => void",
 		"readonly OnWireDropped?: (pin: number, x: number, y: number) => void",
 		"readonly OnPinClicked?: (pin: number, x: number, y: number) => void",
+		MARKUP,
+	],
+	Chart: [
+		"readonly OnSliceClicked?: (slice: number, selected: boolean) => void",
+		"readonly OnCellClicked?: (row: number, column: number, value: number) => void",
+		MARKUP,
+	],
+	MapView: [
+		"readonly OnMarkerClicked?: (marker: number) => void",
+		"readonly OnTile?: (z: number, x: number, y: number) => void",
+		"readonly OnTileCancelled?: (z: number, x: number, y: number) => void",
 		MARKUP,
 	],
 	BlockEditor: [

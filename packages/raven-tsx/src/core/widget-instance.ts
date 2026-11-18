@@ -97,10 +97,16 @@ interface ControlledValue {
 	/** Whether the widget already holds a value, when `sameValue` is not the way to tell. */
 	readonly same?: ((held: string, wanted: string) => boolean) | undefined;
 	/**
-	 * The user changes it without an event that says so: it is not set to what it holds, and not
-	 * put back either, or the view would jump back at the next event of something else.
+	 * The user changes it without an event that says so, or it is a view the user moves, as the
+	 * center of a map: it is not set to what it holds, and not put back either, or the view would
+	 * jump back at the next event of something else. A new value of the prop still moves it.
 	 */
 	readonly unreported?: true | undefined;
+	/**
+	 * When the user's value is kept after an event, not put back to the prop, as the attributes of
+	 * the widget say: a Table that selects several rows, whose rows setting Selected would reduce to one.
+	 */
+	readonly keptWhen?: ((attributes: ReadonlyMap<string, string>) => boolean) | undefined;
 }
 
 /** The props whose function Raven calls as the widget is drawn: a new one needs the widget drawn again. */
@@ -135,11 +141,21 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	Expander: [{ attribute: "Expanded", read: (widget) => flagText(r.Rexpander_is_expanded(widget)) }],
 	Island: [{ attribute: "Expanded", read: (widget) => flagText(r.Risland_is_expanded(widget)) }],
 	Table: [
-		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)) },
+		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)), keptWhen: (attributes) => attributes.get("MultiSelect") === "true" },
 		{ attribute: "SortColumn", read: (widget) => numberText(r.Rtable_get_sort_column(widget)) },
 	],
 	Rating: [{ attribute: "Value", read: (widget) => numberText(r.Rrating_get_value(widget)) }],
 	Pagination: [{ attribute: "Page", read: (widget) => numberText(r.Rpagination_get_page(widget)) }],
+	// (-1 without pages: nothing to compare, so a Page asked for is set, and C says if it is out of range)
+	Carousel: [{ attribute: "Page", read: (widget) => (r.Rcarousel_get_page_count(widget) > 0 ? numberText(r.Rcarousel_get_page(widget)) : "") }],
+	Chart: [{ attribute: "Selected", read: (widget) => numberText(r.Rchart_get_selected(widget)) }],
+	// (the view is the user's, as that of a NodeGraph: OnChanged says where it went, and a click on a
+	// marker must not take it back to the props)
+	MapView: [
+		{ attribute: "Latitude", read: (widget) => numberText(r.Rmap_view_get_center(widget)[0]), unreported: true },
+		{ attribute: "Longitude", read: (widget) => numberText(r.Rmap_view_get_center(widget)[1]), unreported: true },
+		{ attribute: "Zoom", read: (widget) => numberText(r.Rmap_view_get_zoom(widget)), unreported: true },
+	],
 	PdfView: [
 		// (counted from 1, as the attribute is written; C counts from 0. Without a document, a page asked
 		// for waits for one and C says 0 meanwhile: nothing to compare, so each change of Page is set)
@@ -641,6 +657,13 @@ export class WidgetInstance implements HostNode {
 		if (before) {
 			r.Rwidget_invalidate(this.id);
 		}
+		// (a Selected given before the rows existed was refused: it comes back with them. Not over the
+		// rows a user selected in a Table of several, once it had rows)
+		const selected = next.attributes.get("Selected");
+		const kept = previous !== null && CONTROLLED[this.tag]?.find(({ attribute }) => attribute === "Selected")?.keptWhen?.(next.attributes);
+		if (selected !== undefined && !kept && controlledAttributes(this.tag).includes("Selected")) {
+			this.setAttribute("Selected", selected);
+		}
 	}
 
 	/** After an event, puts back what the props say if a handler refused the change. */
@@ -655,9 +678,9 @@ export class WidgetInstance implements HostNode {
 			if (data && this.resolved.handlers.has("OnChanged")) {
 				eventScope.ignoringEvents(() => data.restore(this.id, this.resolved.data));
 			}
-			for (const { attribute, unreported } of controlled ?? []) {
+			for (const { attribute, unreported, keptWhen } of controlled ?? []) {
 				const wanted = this.resolved.attributes.get(attribute);
-				if (wanted !== undefined && !unreported) {
+				if (wanted !== undefined && !unreported && !keptWhen?.(this.resolved.attributes)) {
 					this.setAttribute(attribute, wanted);
 				}
 			}

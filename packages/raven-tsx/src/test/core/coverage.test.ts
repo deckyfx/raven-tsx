@@ -31,6 +31,11 @@ const NOT_WIRED: Readonly<Record<string, string>> = {
 	Rwidget_set_gesture_callback: "rare: through a ref, with inEventScope",
 	Rwidget_set_pen_callback: "rare: through a ref, with inEventScope",
 	Rwidget_set_touch_callback: "rare: through a ref, with inEventScope",
+	Rtile_view_set_section_toggled_callback: "the sections of a TileView are given through a ref (Rtile_view_set_sections), and this with them",
+	Rset_app_event_callback: "not of a widget: the life of the application, paused and resumed by a mobile system",
+	Rwindow_set_back_callback: "Back of Android and iOS, where neither Bun nor Node.js runs",
+	Rscript_set_log_callback: "not of a widget: RavenScript, for the whole application",
+	Rscript_set_diagnostic_callback: "not of a widget: RavenScript, for the whole application",
 };
 
 /** Action attributes of the schema that give nothing, and why: the others have a type in EVENT_VALUE_TYPES. */
@@ -40,6 +45,7 @@ const ACTIONS_WITHOUT_VALUE: Readonly<Record<string, string>> = {
 	"Toast.OnClicked": "the one button of the message",
 	"Timeline.OnChanged": "once per gesture: OnItemChanged says which item, as it happens",
 	"NodeGraph.OnChanged": "once per gesture: OnLinked, OnMoved... say what",
+	"Chart.OnClicked": "a slice or a cell: OnSliceClicked and OnCellClicked say which",
 };
 
 /** Tags whose attributes the user does not change. */
@@ -71,7 +77,9 @@ const SETTINGS: Readonly<Record<string, string>> = {
 	Timeline: "Duration FrameRate Snapping Loop Playing HeaderWidth TrackHeight RulerHeight Preset ClipStyle ClipRadius KeyShape KeySize GridStyle PlayheadColor PlayheadWidth OnChanged",
 	BlockEditor: "Palette OnChanged",
 	NodeGraph: "Grid Flow ReadOnly FrameAll Preset LinkShape LinkWidth LinkGlow PinShape PinSize GridStyle GridSize NodeRadius HeaderStyle HeaderHeight OnChanged",
-	Table: "Columns SortDescending ShowHeader GridLines Striped OnActivated",
+	// (MultiSelect: whether Ctrl and Shift select several rows; Selected is still the one row, and the
+	// others are read with Rtable_get_selection)
+	Table: "Columns SortDescending ShowHeader GridLines Striped MultiSelect OnActivated",
 	DatePicker: "Min Max FirstDayOfWeek Format OnChanged",
 	TimePicker: "ShowSeconds MinuteStep OnChanged",
 	Rating: "Max AllowHalf ReadOnly StarSize OnChanged",
@@ -79,6 +87,9 @@ const SETTINGS: Readonly<Record<string, string>> = {
 	// (Fit: the wheel sets the zoom and the fit becomes None, with no event; setting Fit again is the application asking for it)
 	PdfView: "Source Password Fit OnChanged",
 	// (XMin and XMax are where the view starts: the user moves it, OnViewChanged says so, and setting them again would take it back)
+	Carousel: "Loop Autoplay Indicators Arrows Orientation OnChanged",
+	Chart: "Kind Title Format Color Legend Hole CenterText CenterCaption Min Max Value Values Fill Marker RowLabels ColumnLabels LowColor HighColor OnClicked",
+	MapView: "MinZoom MaxZoom TilePath TileSize Attribution OnChanged",
 	Plot: "Title Legend Crosshair MouseText Tooltips Grid XLabel XScale XMin XMax XFormat XLinearThreshold XGrid XInverted XLocked XVisible YLabel YScale Y2Label Y2Scale OnChanged",
 };
 

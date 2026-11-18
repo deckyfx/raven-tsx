@@ -50,7 +50,7 @@ Raven's native library comes with it: there is a package per platform, and the p
 | macOS Apple Silicon, Intel | `@decky.fx/raven-tsx-darwin-arm64`, `-darwin-x64` |
 | Windows x64 | `@decky.fx/raven-tsx-win32-x64` |
 
-What the system must have: a Vulkan driver, and on Linux libX11. On macOS, version 14 or newer, Vulkan comes from MoltenVK: `brew install molten-vk`.
+What the system must have: on Linux and Windows a Vulkan driver, and on Linux libX11; on macOS, version 14 or newer, nothing else: Raven draws with Metal. An application that asks for Vulkan there (`backend: R_BACKEND_VULKAN` in the options of `runApp`, for a Vulkan `Viewport` or effects given as SPIR-V) needs MoltenVK: `brew install molten-vk`.
 
 `RAVEN_LIBRARY` set to the path of a library has priority, to try a build of your own.
 
@@ -177,6 +177,12 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | `Pagination` | `OnChanged` | page, from 0 |
 | `PdfView` | `OnChanged` | page, from 1, as `Page` counts it |
 | `Breadcrumb` | `OnClicked` | index |
+| `Carousel` | `OnChanged` | page, from 0, as `Page` counts it |
+| `Chart` | `OnSliceClicked` | slice, and whether it is now the selected one |
+| `Chart` | `OnCellClicked` | row, column and value of a cell of a heatmap |
+| `MapView` | `OnChanged` | latitude, longitude, zoom: where the user moved it |
+| `MapView` | `OnMarkerClicked` | id of the marker, from 1: those of `Markup` in their order |
+| `MapView` | `OnTile`, `OnTileCancelled` | z, x, y of a tile asked for, or no longer wanted |
 | `TextEditor` | `OnChanged`, `OnCompletion` | its text, the start of the word |
 | `TextEditor` | `OnZoom` | `number` |
 | `ColorPicker` | `OnChanged` | `"#RRGGBB"`, or `"#RRGGBBAA"` when it is not opaque |
@@ -198,6 +204,8 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 Some events ask: `OnClose` of a `TabView` (index, page) and of a `DockArea` (panel), `OnConnect` of a `NodeGraph` (two pins), and `OnEvent` and `OnDrop`, where true means taken. Return true to let the thing happen. A tab or a panel that stays can then go by taking its element out, which is the way to do it: when Raven closes a panel by itself, it deletes a widget React still has, which does no harm but leaves the element with a `.widget` that is no longer valid. `Documents` on a `TabView` gives its tabs a close button.
 
 Other events give nothing, and share the one action a widget has in Raven: give a widget one of them. `Timeline` and `NodeGraph` have an `OnChanged` of this kind, once per gesture.
+
+A `MapView` asks for its tiles as it is drawn, in `OnTile`: answer with `Rmap_view_set_tile` (pixels) or `Rmap_view_set_tile_failed`, at once or later, or give it `TilePath` to read them from files. Its view is the user's to move: `OnChanged` says where it went, and a new `Latitude`, `Longitude` or `Zoom` moves it, but the props are not put back after an event. A `Table` with `MultiSelect` keeps the rows the user selected in the same way; `Rtable_get_selection` reads them.
 
 Inputs are controlled, as in React DOM. With `Text={value}`, what the state says stays on screen if a handler refuses a change. An update made in an event is committed before the next event, as a click in React DOM. `ListView` and `ComboBox` keep their `Selected` when their `Items` change. A `|` in an item would split it, as `Items` is written that way in XML: for such items use `ItemText`. `FileBrowser`'s `Directory` and `Timeline`'s `Playing` are not held this way: the user changes them with no event that says so.
 
