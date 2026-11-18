@@ -8,7 +8,7 @@
 
 import type { PluginItem, TransformOptions } from "@babel/core";
 import { readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The major version of Solid this package is written for: its renderer, its compiler. */
@@ -169,8 +169,20 @@ function folderMain(folder: string): string | undefined {
 	} catch {
 		main = undefined;
 	}
-	const candidates = typeof main === "string" && main !== "" ? [join(folder, main), join(folder, `${main}.js`), join(folder, main, "index.js")] : [];
-	return [...candidates, join(folder, "index.js")].find((path) => statSync(path, { throwIfNoEntry: false })?.isFile());
+	// (resolved once against the folder, as Node.js does: an absolute main stays itself, and `dist/`
+	// is `dist`, whose `dist.js` comes before `dist/index.js`)
+	const base = typeof main === "string" && main !== "" ? resolve(folder, main) : undefined;
+	const candidates = base === undefined ? [] : [base, `${base}.js`, join(base, "index.js")];
+	return [...candidates, join(folder, "index.js")].find(isFile);
+}
+
+/** Whether a path is a file; not when it cannot be looked at (a loop of links), so the next candidate is tried. */
+function isFile(path: string): boolean {
+	try {
+		return statSync(path, { throwIfNoEntry: false })?.isFile() === true;
+	} catch {
+		return false;
+	}
 }
 
 /** Whether Node.js keeps the link of its main file: `--preserve-symlinks-main` on its command line or in NODE_OPTIONS. */

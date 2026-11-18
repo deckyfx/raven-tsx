@@ -88,6 +88,19 @@ test("the application's folder is that of its entry when the runtime gives one t
 		writeFileSync(join(app, "dist", "index.cjs"), "");
 		expect(applicationFolder(app, "/somewhere")).toBe(join(app, "dist"));
 		expect(applicationFolder(import.meta.dir, "/somewhere")).toBe(import.meta.dir);
+		// (main resolved against the folder before .js is added: `dist/` is `dist`, so `dist.js` before `dist/index.js`)
+		writeFileSync(join(app, "package.json"), JSON.stringify({ name: "app", main: "dist/" }));
+		writeFileSync(join(app, "dist", "index.js"), "");
+		mkdirSync(join(app, "lib"));
+		writeFileSync(join(app, "lib", "dist.js"), "");
+		writeFileSync(join(app, "lib", "package.json"), JSON.stringify({ name: "lib", main: "dist/" }));
+		mkdirSync(join(app, "lib", "dist"));
+		writeFileSync(join(app, "lib", "dist", "index.js"), "");
+		expect(applicationFolder(join(app, "lib"), "/somewhere")).toBe(join(app, "lib"));
+		expect(applicationFolder(app, "/somewhere")).toBe(join(app, "dist"));
+		// (an absolute main is itself, not under the folder)
+		writeFileSync(join(app, "package.json"), JSON.stringify({ name: "app", main: join(app, "lib", "dist.js") }));
+		expect(applicationFolder(app, "/somewhere")).toBe(join(app, "lib"));
 	} finally {
 		rmSync(app, { recursive: true, force: true });
 	}
@@ -133,6 +146,12 @@ test.skipIf(!canLink())("an entry that is a link counts where it leads, unless t
 		// (an entry that cannot be looked at, a loop of links: the working directory)
 		symlinkSync(join(root, "loop"), join(root, "loop"));
 		expect(applicationFolder(join(root, "loop"), "/somewhere")).toBe("/somewhere");
+		// (a main under a loop of links: not a file, and the folder's index.js comes next)
+		mkdirSync(join(root, "app5"));
+		writeFileSync(join(root, "app5", "package.json"), JSON.stringify({ name: "app5", main: "loop/start.js" }));
+		symlinkSync(join(root, "app5", "loop"), join(root, "app5", "loop"));
+		writeFileSync(join(root, "app5", "index.js"), "");
+		expect(applicationFolder(join(root, "app5"), "/somewhere")).toBe(join(root, "app5"));
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
