@@ -1,11 +1,25 @@
 /** The Solid that an application has: the package is written for Solid 1, and says so of a Solid 2. */
 
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { applicationFolder, assertSolidVersion, installedPackage, installedVersion, SOLID_MAJOR, solidVersionProblem } from "../../solid/compile";
 import manifest from "../../../package.json";
+
+/** Whether this system lets a process make symbolic links (Windows asks for a privilege or developer mode). */
+function canLink(): boolean {
+	const folder = mkdtempSync(join(tmpdir(), "raven-tsx-link-"));
+	try {
+		symlinkSync(folder, join(folder, "link"), "dir");
+		return true;
+	} catch {
+		return false;
+	} finally {
+		rmSync(folder, { recursive: true, force: true });
+	}
+}
+
 
 test("Solid 1 is what the package is written for", () => {
 	expect(SOLID_MAJOR).toBe(1);
@@ -73,11 +87,25 @@ test("the application's folder is that of its entry when the runtime gives one t
 		writeFileSync(join(app, "dist", "index.cjs"), "");
 		expect(applicationFolder(app, "/somewhere")).toBe(join(app, "dist"));
 		expect(applicationFolder(import.meta.dir, "/somewhere")).toBe(import.meta.dir);
-		// (an entry that cannot be looked at, a loop of links: the working directory)
-		symlinkSync(join(app, "loop"), join(app, "loop"));
-		expect(applicationFolder(join(app, "loop"), "/somewhere")).toBe("/somewhere");
 	} finally {
 		rmSync(app, { recursive: true, force: true });
+	}
+});
+
+test.skipIf(!canLink())("an entry that is a link counts where it leads, unless the runtime keeps the link", () => {
+	const root = realpathSync.native(mkdtempSync(join(tmpdir(), "raven-tsx-entry-")));
+	try {
+		// (start.mjs at the root leads to apps/web/index.mjs, which runs from there)
+		mkdirSync(join(root, "apps", "web"), { recursive: true });
+		writeFileSync(join(root, "apps", "web", "index.mjs"), "");
+		symlinkSync(join(root, "apps", "web", "index.mjs"), join(root, "start.mjs"));
+		expect(applicationFolder(join(root, "start.mjs"), "/somewhere")).toBe(join(root, "apps", "web"));
+		expect(applicationFolder(join(root, "start.mjs"), "/somewhere", true)).toBe(root);
+		// (an entry that cannot be looked at, a loop of links: the working directory)
+		symlinkSync(join(root, "loop"), join(root, "loop"));
+		expect(applicationFolder(join(root, "loop"), "/somewhere")).toBe("/somewhere");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
 	}
 });
 

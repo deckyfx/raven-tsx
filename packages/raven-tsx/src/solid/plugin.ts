@@ -10,8 +10,9 @@
  */
 
 import type { BunPlugin } from "bun";
-import { readFileSync } from "node:fs";
-import { dirname, extname, resolve, sep } from "node:path";
+import { readFileSync, realpathSync } from "node:fs";
+import { dirname, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { assertSolidVersion, installedPackage, isRendererFile, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
 
 /** What the plugin can be told. */
@@ -94,14 +95,23 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 			// (the renderer of this package, when it is loaded: its own solid-js, which may be another copy
 			// than the sources'. A renderer the build leaves out, however it does, is never loaded here, and
 			// the place it runs in resolves it)
-			build.onLoad({ filter: RENDERER_FILE }, ({ path }) => {
-				if (isRendererFile(path)) {
+			if (build.config) {
+				// (a build: any file named renderer, checked when it is this package's, then left to Bun and
+				// the other plugins, with the loader they give it)
+				build.onLoad({ filter: RENDERER_FILE }, ({ path }) => {
+					if (isRendererFile(path)) {
+						assertSolidFrom(dirname(path));
+					}
+					return undefined;
+				});
+			} else {
+				// (at run time a hook must give the contents: only this package's own renderer is taken)
+				const renderer = realpathSync(fileURLToPath(new URL("./renderer.ts", import.meta.url)));
+				build.onLoad({ filter: new RegExp(`^${renderer.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }, ({ path }) => {
 					assertSolidFrom(dirname(path));
-				}
-				// (as it is, with the loader Bun would take, the build's own for this extension first: a hook of
-				// Bun's onLoad cannot pass a file on)
-				return { contents: readFileSync(path, "utf8"), loader: build.config?.loader?.[extname(path)] ?? (/\.[cm]?ts$/.test(path) ? "ts" : "js") };
-			});
+					return { contents: readFileSync(path, "utf8"), loader: "ts" };
+				});
+			}
 			// (Bun runs no onResolve of a plugin for a package: the server's file is read as the client's)
 			build.onLoad({ filter: /[\\/]solid-js[\\/].*server\.c?js$/ }, ({ path }) => {
 				const client = clientFilesOf(solidRoot(path), development).get(path);

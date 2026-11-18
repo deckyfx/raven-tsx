@@ -7,7 +7,7 @@
  */
 
 import type { PluginItem, TransformOptions } from "@babel/core";
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -130,10 +130,11 @@ export const RENDERER = "@decky.fx/raven-tsx/solid/renderer";
 /**
  * The folder an application's packages are resolved from: that of its entry file when the runtime
  * gives one that exists (`Bun.main`, `process.argv[1]`), that of the main file of a folder given as
- * the entry (`node apps/web`), else the working directory. Run from the root of a
+ * the entry (`node apps/web`), else the working directory. An entry that is a link counts where it
+ * leads, unless `preserveSymlinks`. Run from the root of a
  * workspace, the entry's folder may see another solid-js than the root.
  */
-export function applicationFolder(entry: string | undefined, cwd: string): string {
+export function applicationFolder(entry: string | undefined, cwd: string, preserveSymlinks = false): string {
 	if (!entry || !isAbsolute(entry)) {
 		return cwd;
 	}
@@ -143,7 +144,9 @@ export function applicationFolder(entry: string | undefined, cwd: string): strin
 			return cwd;
 		}
 		if (!found.isDirectory()) {
-			return dirname(entry);
+			// (the file a link leads to: the one that runs, and resolves its imports from its own folder,
+			// unless the runtime is told to keep the link, as --preserve-symlinks-main tells Node.js)
+			return dirname(preserveSymlinks ? entry : realpathSync(entry));
 		}
 		// (a folder runs its main file, which may be deeper and see other packages: `dist/index.cjs`)
 		try {

@@ -22,7 +22,7 @@ import { applicationFolder, assertSolidVersion, installedPackage, isTypeScript, 
 // without saying why, as would a Solid 2 with no compiler installed yet. Both the solid-js that the
 // renderer of the package imports and the one of the application's entry, which may be another copy)
 assertSolidVersion({ solid: installedPackage("solid-js"), preset: installedPackage("babel-preset-solid") });
-const application = applicationFolder(process.argv[1], process.cwd());
+const application = applicationFolder(process.argv[1], process.cwd(), process.execArgv.includes("--preserve-symlinks-main"));
 assertSolidVersion({ solid: installedPackage("solid-js", (name) => createRequire(join(application, "index.js")).resolve(name), application) });
 
 const [{ default: babel }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);

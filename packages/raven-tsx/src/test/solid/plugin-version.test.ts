@@ -4,13 +4,27 @@
  */
 
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { RENDERER } from "../../solid/compile";
 import { solidPlugin } from "../../solid/plugin";
 
 const roots: string[] = [];
+
+/** Whether this system lets a process make symbolic links (Windows asks for a privilege or developer mode). */
+function canLink(): boolean {
+	const folder = mkdtempSync(join(tmpdir(), "raven-tsx-link-"));
+	try {
+		symlinkSync(folder, join(folder, "link"), "dir");
+		return true;
+	} catch {
+		return false;
+	} finally {
+		rmSync(folder, { recursive: true, force: true });
+	}
+}
+
 
 afterAll(() => {
 	for (const root of roots) {
@@ -35,7 +49,8 @@ function solidPackage(folder: string, version: string): void {
  * compiled TSX imports) sees its own.
  */
 function project(sourceSolid: string, rendererSolid: string): string {
-	const root = mkdtempSync(join(tmpdir(), "raven-tsx-plugin-"));
+	// (its real path: on Windows the temporary folder is given in its short form, RUNNER~1, and Bun reports the long one)
+	const root = realpathSync.native(mkdtempSync(join(tmpdir(), "raven-tsx-plugin-")));
 	roots.push(root);
 	write(join(root, "package.json"), JSON.stringify({ name: "fixture", private: true, type: "module" }));
 	solidPackage(join(root, "node_modules", "solid-js"), sourceSolid);
@@ -88,7 +103,7 @@ test("a renderer the build leaves out is not checked, however it does: where the
 	expect(await build(project("2.0.1", "1.9.19"), { external: [RENDERER] })).toContain("not solid-js 2.0.1");
 });
 
-test("a renderer installed through a link to a folder of another name is checked too", async () => {
+test.skipIf(!canLink())("a renderer installed through a link to a folder of another name is checked too", async () => {
 	const root = project("1.9.19", "2.0.1");
 	// (node_modules/@decky.fx/raven-tsx links to vendor/local-raven: Bun loads the real path)
 	const raven = join(root, "node_modules", "@decky.fx", "raven-tsx");
@@ -120,4 +135,15 @@ test("a file named renderer that is not this package's keeps the loader the buil
 	expect(await build(root, { loader: { ".cjs": "text" } })).toBe("");
 	// (and without that setting, it is JavaScript, which these words are not)
 	expect(await build(root)).not.toBe("");
+});
+
+test("a file named renderer that is not this package's reaches the plugins after it", async () => {
+	const root = project("1.9.19", "1.9.19");
+	// (a template another plugin turns into JavaScript: this plugin must not answer for it)
+	write(join(root, "src", "renderer.cjs"), "{{ a template, not JavaScript }}\n");
+	write(join(root, "src", "app.tsx"), `import words from "./renderer.cjs";\nexport const app = () => <label>{words}</label>;\n`);
+	const template = { name: "template", setup: (build: Bun.PluginBuilder) => void build.onLoad({ filter: /renderer\.cjs$/ }, () => ({ contents: `export default "from the template";`, loader: "js" })) };
+	const result = await Bun.build({ entrypoints: [join(root, "src", "app.tsx")], plugins: [solidPlugin(), template] });
+	expect(result.success).toBe(true);
+	expect(await result.outputs[0]?.text()).toContain("from the template");
 });
