@@ -714,6 +714,14 @@ export class WidgetInstance implements HostNode {
 		}
 		if (!several || !this.selectionTaken) {
 			this.setAttribute("Selected", selected);
+			this.noteSelection(selected);
+		}
+	}
+
+	/** Whether the widget holds the Selected of its props now, for `selectionTaken`. */
+	private noteSelection(selected: string): void {
+		const control = CONTROLLED[this.tag]?.find(({ attribute }) => attribute === "Selected");
+		if (control) {
 			this.selectionTaken = (control.same ?? sameValue)(control.read(this.id), selected);
 		}
 	}
@@ -788,6 +796,11 @@ export class WidgetInstance implements HostNode {
 		this.resolved = next;
 		if (previous.attributes.get("Items") !== next.attributes.get("Items")) {
 			this.restoreSelected();
+		}
+		// (a new Selected, taken or refused: the rows that come later give it again if it was refused)
+		const selected = next.attributes.get("Selected");
+		if (selected !== undefined && previous.attributes.get("Selected") !== selected) {
+			this.noteSelection(selected);
 		}
 	}
 

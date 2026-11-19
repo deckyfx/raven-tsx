@@ -44,8 +44,10 @@ export class TileWorkers {
 	cancelled = 0;
 	private readonly workers: Worker[] = [];
 	private readonly idle: Worker[] = [];
-	/** The tile each busy worker draws. */
-	private readonly drawing = new Map<Worker, TilePlace>();
+	/** The tile each busy worker draws, and whether the map still wants it (it was not cancelled since). */
+	private readonly drawing = new Map<Worker, { readonly tile: TilePlace; wanted: boolean }>();
+	/** Workers that failed since a tile was last drawn: past a few, the pool stops starting new ones. */
+	private failures = 0;
 	private readonly waiting: TilePlace[] = [];
 	/** Buffers of a tile, used again: as many as there are workers, in the end. */
 	private readonly free: ArrayBuffer[] = [];
@@ -60,6 +62,10 @@ export class TileWorkers {
 	/** The map needs a tile (`OnTile`): it waits for a worker. */
 	readonly request = (z: number, x: number, y: number): void => {
 		this.asked++;
+		// (a new tile tries again, with a pool that failed to start before)
+		if (this.workers.length === 0) {
+			this.failures = 0;
+		}
 		this.start();
 		this.waiting.push({ z, x, y });
 		this.dispatch();
@@ -74,6 +80,12 @@ export class TileWorkers {
 		const index = this.waiting.findIndex((tile) => tile.z === z && tile.x === x && tile.y === y);
 		if (index >= 0) {
 			this.waiting.splice(index, 1);
+		}
+		// (one a worker draws: if it fails, that is not the map's concern, which may have asked again)
+		for (const job of this.drawing.values()) {
+			if (job.tile.z === z && job.tile.x === x && job.tile.y === y) {
+				job.wanted = false;
+			}
 		}
 	};
 
@@ -110,7 +122,7 @@ export class TileWorkers {
 				return;
 			}
 			const job: TileJob = { kind: "tile", ...tile, pixels: this.free.pop() ?? new ArrayBuffer(TILE * TILE * 4) };
-			this.drawing.set(worker, tile);
+			this.drawing.set(worker, { tile, wanted: true });
 			worker.postMessage(job, [job.pixels]);
 		}
 	}
@@ -118,6 +130,7 @@ export class TileWorkers {
 	/** A worker drew a tile: the map gets it (it copies the pixels), and the worker the next one. */
 	private finished(worker: Worker, job: TileJob): void {
 		this.drawing.delete(worker);
+		this.failures = 0;
 		this.deliver(job.z, job.x, job.y, new Uint8Array(job.pixels));
 		this.free.push(job.pixels);
 		this.idle.push(worker);
@@ -125,12 +138,15 @@ export class TileWorkers {
 	}
 
 	/**
-	 * A worker failed: the tile it drew will not come, which the map is told (it may ask again
-	 * later; drawing it again at once could fail the same way), and another worker takes its place.
+	 * A worker failed: the tile it drew will not come, which the map is told if it still wants it (it
+	 * may ask again later; drawing it again at once could fail the same way), and another worker takes
+	 * its place while tiles wait. Workers that keep failing, as one that cannot start, are not started
+	 * again and again: past twice as many as the pool holds with no tile drawn, the tiles that wait
+	 * fail too, and the next tile asked for tries a new pool.
 	 */
 	private failed(worker: Worker, message: string): void {
 		console.error(`map: a tile worker failed: ${message}`);
-		const tile = this.drawing.get(worker);
+		const job = this.drawing.get(worker);
 		this.drawing.delete(worker);
 		worker.terminate();
 		const index = this.workers.indexOf(worker);
@@ -143,10 +159,21 @@ export class TileWorkers {
 		if (idle >= 0) {
 			this.idle.splice(idle, 1);
 		}
-		if (tile !== undefined) {
-			this.fail(tile.z, tile.x, tile.y);
+		if (job?.wanted === true) {
+			this.fail(job.tile.z, job.tile.x, job.tile.y);
 		}
-		this.start();
+		this.failures++;
+		if (this.waiting.length === 0) {
+			return;
+		}
+		if (this.failures <= this.workerCount * 2) {
+			this.start();
+		}
 		this.dispatch();
+		if (this.workers.length === 0) {
+			for (const tile of this.waiting.splice(0)) {
+				this.fail(tile.z, tile.x, tile.y);
+			}
+		}
 	}
 }

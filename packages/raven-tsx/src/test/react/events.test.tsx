@@ -1251,6 +1251,23 @@ test("a Table that selects several rows takes a Selected given before its rows o
 	expect(r.Rtable_get_selection_count(find("t"))).toBe(2);
 });
 
+test("a Table that selects several rows takes again a new Selected it refused, once its row comes", async () => {
+	// (the same functions at each render, as useCallback gives: only RowCount says the rows changed)
+	const cellText = (row: number): string => `row ${row}`;
+	const changed = (): void => {};
+	function Rows({ count, selected }: { count: number; selected: number }): ReactNode {
+		return <VBox><Table Name="t" Height={200} Columns={["A"]} RowCount={count} CellText={cellText} MultiSelect Selected={selected} OnChanged={changed} /></VBox>;
+	}
+	await mount(<Rows count={4} selected={1} />);
+	expect(r.Rtable_get_selected(find("t"))).toBe(1);
+	// (row 9 is not there yet: refused, and given again with the rows)
+	root?.render(<Rows count={4} selected={9} />);
+	await settle();
+	root?.render(<Rows count={10} selected={9} />);
+	await settle();
+	expect(r.Rtable_get_selected(find("t"))).toBe(9);
+});
+
 test("a Table that selects several rows keeps the user's rows after an event, whatever Selected says", async () => {
 	const changes: number[] = [];
 	const table = createRef<WidgetInstance>();
