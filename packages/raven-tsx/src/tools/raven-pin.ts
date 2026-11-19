@@ -4,7 +4,7 @@
  * `raven:status`, `raven:check`, `raven:update`, `native:local` and `sync-binding`.
  */
 
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { functionsOfBinding, missingFunctions, readStamp, shortCommit, STAMP_FILE, type LibraryStamp } from "../core/library-check";
 import { parseApi, type RavenApi } from "./raven-api";
@@ -169,20 +169,16 @@ export async function buildLibrary(build: string): Promise<void> {
 
 /**
  * Builds the addon of Raven's Node.js binding from a checkout, in its folder `build-node`, and
- * says where it is. On Windows, which Raven's CMake leaves out, it takes the one built there by
- * `packages/raven-tsx/addon`, if any. Without one, nor the headers of Node.js elsewhere, the
- * package of the platform works on Bun only, which is said.
+ * says where it is (on Windows, Raven's CMake downloads node.lib for the Node.js it finds).
+ * Without the headers of Node.js, the package of the platform works on Bun only, which is said.
  */
 export async function buildAddon(checkout: string): Promise<string | undefined> {
 	const build = `${checkout}/build-node`;
 	const built = (): string | undefined => [`${build}/${ADDON_FILE}`, `${build}/Release/${ADDON_FILE}`].find((path) => existsSync(path));
-	if (process.platform === "win32") {
-		// (Raven's CMake leaves it out here: it is built by packages/raven-tsx/addon, with node.lib, as the release workflow does)
-		const addon = built();
-		if (!addon) {
-			console.warn(`no ${ADDON_FILE} in ${build}: build it with packages/raven-tsx/addon (see its CMakeLists.txt), or the package of this platform works on Bun only`);
-		}
-		return addon;
+	// (one configured from another folder, as the CMake project of this package that built it on
+	// Windows before Raven did: CMake would refuse to configure it again)
+	if (configuredFromElsewhere(build, `${checkout}/bindings/node`)) {
+		rmSync(build, { recursive: true, force: true });
 	}
 	for (const command of [
 		["cmake", "-S", `${checkout}/bindings/node`, "-B", build, "-DCMAKE_BUILD_TYPE=Release"],
@@ -196,9 +192,35 @@ export async function buildAddon(checkout: string): Promise<string | undefined> 
 	}
 	const addon = built();
 	if (!addon) {
-		console.warn(`no ${ADDON_FILE} built (Windows, or no node_api.h): the package of this platform works on Bun only`);
+		console.warn(`no ${ADDON_FILE} built (no Node.js, or no node_api.h, or on Windows no node.lib it could download): the package of this platform works on Bun only`);
 	}
 	return addon;
+}
+
+/**
+ * Whether a build folder of CMake was configured from another source folder than `source`:
+ * its CMakeCache.txt says so. Not when it has none, or one that does not say.
+ */
+export function configuredFromElsewhere(build: string, source: string): boolean {
+	let cache: string;
+	try {
+		cache = readFileSync(`${build}/CMakeCache.txt`, "utf8");
+	} catch {
+		return false;
+	}
+	const home = /^CMAKE_HOME_DIRECTORY:INTERNAL=(.*)$/m.exec(cache)?.[1]?.trim();
+	if (!home) {
+		return false;
+	}
+	// (CMake writes it with slashes, on Windows too; the same folder by another path is the same)
+	const real = (path: string): string => {
+		try {
+			return realpathSync.native(path);
+		} catch {
+			return resolve(path);
+		}
+	};
+	return real(home) !== real(source);
 }
 
 /** Says what is wrong with a library for a binding, or stops. */

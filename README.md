@@ -48,6 +48,9 @@ The C examples of Raven are ported to TSX in [examples](examples), with the same
 | [overlay](examples/overlay) | A window that is seen through, and the ways to blur what is behind |
 | [viewport_opengl](examples/viewport_opengl) | An OpenGL scene in the native child window of a viewport. X11 only (GLX): on a Wayland session, start it with `RAVEN_WINDOW_SYSTEM=x11`; on Windows and macOS it says it cannot make a context |
 | [viewport_vulkan](examples/viewport_vulkan) | The scene of the original, rendered in software in TypeScript |
+| [carousel](examples/carousel) | An onboarding in pages that swipe, with dots, arrows, a loop and an autoplay ([screenshot](docs/screenshots/carousel.png)) |
+| [charts](examples/charts) | A dashboard of pies, donuts, gauges, sparklines and a heatmap, with live data ([screenshot](docs/screenshots/charts.png)) |
+| [map](examples/map) | A map whose tiles the application draws on worker threads, with markers and flights between places ([screenshot](docs/screenshots/map.png)) |
 | [browser](examples/browser), [editor](examples/editor), [effects](examples/effects), [music](examples/music), [notepad](examples/notepad), [studio](examples/studio), [themes](examples/themes), [workspace](examples/workspace) | Shown above |
 
 To run one, check out and build Raven at the pinned commit, and make the native package first (see [Working on this package](packages/raven-tsx#working-on-this-package)), then, from the root of this repository:

@@ -97,10 +97,16 @@ interface ControlledValue {
 	/** Whether the widget already holds a value, when `sameValue` is not the way to tell. */
 	readonly same?: ((held: string, wanted: string) => boolean) | undefined;
 	/**
-	 * The user changes it without an event that says so: it is not set to what it holds, and not
-	 * put back either, or the view would jump back at the next event of something else.
+	 * The user changes it without an event that says so, or it is a view the user moves, as the
+	 * center of a map: it is not set to what it holds, and not put back either, or the view would
+	 * jump back at the next event of something else. A new value of the prop still moves it.
 	 */
 	readonly unreported?: true | undefined;
+	/**
+	 * When the user's value is kept after an event, not put back to the prop, as the attributes of
+	 * the widget say: a Table that selects several rows, whose rows setting Selected would reduce to one.
+	 */
+	readonly keptWhen?: ((attributes: ReadonlyMap<string, string>) => boolean) | undefined;
 }
 
 /** The props whose function Raven calls as the widget is drawn: a new one needs the widget drawn again. */
@@ -112,6 +118,11 @@ const twoDigits = (value: number): string => String(value).padStart(2, "0");
 const flagText = (value: number): string => (value ? "true" : "false");
 /** A text is that text: "1.0" is not "1", which is what makes a number the same as another. */
 const sameText = (held: string, wanted: string): boolean => held === wanted;
+/**
+ * The same number, exactly: a place on a map, where what the general tolerance lets pass is
+ * pixels at a high zoom. (what OnChanged gives is what the widget reads back, to the last bit)
+ */
+const sameNumber = (held: string, wanted: string): boolean => held !== "" && wanted !== "" && Number(held) === Number(wanted);
 /** A code of a color, in either case. */
 const sameColor = (held: string, wanted: string): boolean => held.toLowerCase() === wanted.toLowerCase();
 
@@ -135,11 +146,21 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	Expander: [{ attribute: "Expanded", read: (widget) => flagText(r.Rexpander_is_expanded(widget)) }],
 	Island: [{ attribute: "Expanded", read: (widget) => flagText(r.Risland_is_expanded(widget)) }],
 	Table: [
-		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)) },
+		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)), keptWhen: (attributes) => attributes.get("MultiSelect") === "true" },
 		{ attribute: "SortColumn", read: (widget) => numberText(r.Rtable_get_sort_column(widget)) },
 	],
 	Rating: [{ attribute: "Value", read: (widget) => numberText(r.Rrating_get_value(widget)) }],
 	Pagination: [{ attribute: "Page", read: (widget) => numberText(r.Rpagination_get_page(widget)) }],
+	// (-1 without pages: nothing to compare, so a Page asked for is set, and C says if it is out of range)
+	Carousel: [{ attribute: "Page", read: (widget) => (r.Rcarousel_get_page_count(widget) > 0 ? numberText(r.Rcarousel_get_page(widget)) : "") }],
+	Chart: [{ attribute: "Selected", read: (widget) => numberText(r.Rchart_get_selected(widget)) }],
+	// (the view is the user's, as that of a NodeGraph: OnChanged says where it went, and a click on a
+	// marker must not take it back to the props)
+	MapView: [
+		{ attribute: "Latitude", read: (widget) => numberText(r.Rmap_view_get_center(widget)[0]), same: sameNumber, unreported: true },
+		{ attribute: "Longitude", read: (widget) => numberText(r.Rmap_view_get_center(widget)[1]), same: sameNumber, unreported: true },
+		{ attribute: "Zoom", read: (widget) => numberText(r.Rmap_view_get_zoom(widget)), same: sameNumber, unreported: true },
+	],
 	PdfView: [
 		// (counted from 1, as the attribute is written; C counts from 0. Without a document, a page asked
 		// for waits for one and C says 0 meanwhile: nothing to compare, so each change of Page is set)
@@ -253,6 +274,32 @@ const SET_BY_CALL: Readonly<Record<string, Readonly<Record<string, (widget: r.Ri
 		},
 	},
 	TreeView: { Items: fillTree },
+	// (in double precision: the attributes of Raven 0.3.0 read a float, 120.000001 as 120, which is
+	// pixels at a high zoom. The other coordinate of the center stays)
+	MapView: {
+		Latitude: (widget, value) => setMapNumber("Latitude", value, (number) => r.Rmap_view_set_center(widget, number, r.Rmap_view_get_center(widget)[1])),
+		Longitude: (widget, value) => setMapNumber("Longitude", value, (number) => r.Rmap_view_set_center(widget, r.Rmap_view_get_center(widget)[0], number)),
+		Zoom: (widget, value) => setMapNumber("Zoom", value, (number) => r.Rmap_view_set_zoom(widget, number)),
+	},
+};
+
+/** Gives a MapView a number of its view, or says it did not take one that is not a number. */
+function setMapNumber(name: string, value: string, set: (number: number) => void): void {
+	const number = Number(value);
+	if (value.trim() === "" || !Number.isFinite(number)) {
+		console.warn(`raven-tsx: <MapView> did not take ${name}="${value}"`);
+		return;
+	}
+	set(number);
+}
+
+/**
+ * Attributes Raven takes only once the widget has the children they name: the page of a
+ * Carousel, which has no page before its children. They are set when the children are placed,
+ * and again when children come, as long as the widget does not hold them.
+ */
+const AFTER_CHILDREN: Readonly<Record<string, readonly string[]>> = {
+	Carousel: ["Page"],
 };
 
 /**
@@ -317,6 +364,12 @@ export class WidgetInstance implements HostNode {
 	private placing = false;
 	/** Its handlers were forgotten (`forgetTree`): placed again alive, it gets them back. */
 	private forgotten = false;
+	/**
+	 * Whether the widget took the Selected of its props, in a Table that selects several rows: one
+	 * given before its rows was refused, and is given again when they come; once taken, the rows the
+	 * user selects are theirs.
+	 */
+	private selectionTaken = false;
 	/** Counts the passes that close or open the windows in it: a newer one ends the one under way. */
 	private windowsPass = 0;
 
@@ -390,6 +443,9 @@ export class WidgetInstance implements HostNode {
 				if (this.holds(child) && widget !== null && r.Rwidget_is_valid(widget)) {
 					r.Rwidget_insert_child(this.id, widget, this.placeAmongPlaced(child));
 				}
+			}
+			if (this.state === "live") {
+				this.applyAfterChildren();
 			}
 		} catch (error) {
 			// (the framework keeps it, and takes it away with the rest of the tree that failed)
@@ -606,8 +662,12 @@ export class WidgetInstance implements HostNode {
 	 * gives them again, which tells the parent, that already took its child, to look at them.
 	 */
 	private applyAll(next: ResolvedProps): void {
+		const afterChildren = AFTER_CHILDREN[this.tag] ?? [];
 		for (const [name, value] of next.attributes) {
-			this.setAttribute(name, value);
+			// (not before the children: the widget is made with none)
+			if (!afterChildren.includes(name)) {
+				this.setAttribute(name, value);
+			}
 		}
 		this.applyData(new Map(), next);
 		applyHandlers(this.tag, this.id, new Map(), next.handlers);
@@ -641,6 +701,29 @@ export class WidgetInstance implements HostNode {
 		if (before) {
 			r.Rwidget_invalidate(this.id);
 		}
+		// (a Selected given before the rows existed was refused: it comes back with them. Not over the
+		// rows a user selected in a Table of several, once it took the Selected asked for)
+		const selected = next.attributes.get("Selected");
+		const control = CONTROLLED[this.tag]?.find(({ attribute }) => attribute === "Selected");
+		if (selected === undefined || !control) {
+			return;
+		}
+		const several = control.keptWhen?.(next.attributes) === true;
+		if (previous?.attributes.get("Selected") !== selected) {
+			this.selectionTaken = false;
+		}
+		if (!several || !this.selectionTaken) {
+			this.setAttribute("Selected", selected);
+			this.noteSelection(selected);
+		}
+	}
+
+	/** Whether the widget holds the Selected of its props now, for `selectionTaken`. */
+	private noteSelection(selected: string): void {
+		const control = CONTROLLED[this.tag]?.find(({ attribute }) => attribute === "Selected");
+		if (control) {
+			this.selectionTaken = (control.same ?? sameValue)(control.read(this.id), selected);
+		}
 	}
 
 	/** After an event, puts back what the props say if a handler refused the change. */
@@ -655,9 +738,9 @@ export class WidgetInstance implements HostNode {
 			if (data && this.resolved.handlers.has("OnChanged")) {
 				eventScope.ignoringEvents(() => data.restore(this.id, this.resolved.data));
 			}
-			for (const { attribute, unreported } of controlled ?? []) {
+			for (const { attribute, unreported, keptWhen } of controlled ?? []) {
 				const wanted = this.resolved.attributes.get(attribute);
-				if (wanted !== undefined && !unreported) {
+				if (wanted !== undefined && !unreported && !keptWhen?.(this.resolved.attributes)) {
 					this.setAttribute(attribute, wanted);
 				}
 			}
@@ -714,6 +797,11 @@ export class WidgetInstance implements HostNode {
 		if (previous.attributes.get("Items") !== next.attributes.get("Items")) {
 			this.restoreSelected();
 		}
+		// (a new Selected, taken or refused: the rows that come later give it again if it was refused)
+		const selected = next.attributes.get("Selected");
+		if (selected !== undefined && previous.attributes.get("Selected") !== selected) {
+			this.noteSelection(selected);
+		}
 	}
 
 	/**
@@ -756,6 +844,17 @@ export class WidgetInstance implements HostNode {
 			r.Rwidget_destroy(old);
 		}
 		this.applyParentAttributes();
+		this.applyAfterChildren();
+	}
+
+	/** Sets the attributes that need the children of the widget, once it has them (`AFTER_CHILDREN`). */
+	private applyAfterChildren(): void {
+		for (const name of AFTER_CHILDREN[this.tag] ?? []) {
+			const value = this.resolved.attributes.get(name);
+			if (value !== undefined && r.Rwidget_get_child_count(this.id) > 0) {
+				this.setAttribute(name, value);
+			}
+		}
 	}
 
 	/**
@@ -822,6 +921,7 @@ export class WidgetInstance implements HostNode {
 			// (at its place, not at the end: making it ran user code, which may have added others after it)
 			if (this.holds(child)) {
 				r.Rwidget_insert_child(this.id, child.nativeWidget as r.Rid, this.placeAmongPlaced(child));
+				this.applyAfterChildren();
 			}
 		});
 	}
@@ -882,6 +982,7 @@ export class WidgetInstance implements HostNode {
 			this.make(child, () => {
 				if (this.holds(child)) {
 					r.Rwidget_insert_child(this.id, child.nativeWidget as r.Rid, this.placeAmongPlaced(child));
+					this.applyAfterChildren();
 				}
 			});
 		}

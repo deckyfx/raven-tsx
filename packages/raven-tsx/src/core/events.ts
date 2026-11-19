@@ -47,7 +47,7 @@ type IndexAndFlagHandler = (index: number, flag: boolean) => void;
 class EventScope {
 	private flush: () => void = () => {};
 	private wrap: (run: () => void) => void = (run) => run();
-	private ignoring = 0;
+	private ignoringDepth = 0;
 
 	/** Gives the function that commits pending updates: an adapter says how, for its framework. */
 	setFlush(flush: () => void): void {
@@ -59,13 +59,18 @@ class EventScope {
 		this.wrap = wrap;
 	}
 
+	/** Whether a change made by the renderer is running, whose events are not from the user. */
+	get ignoring(): boolean {
+		return this.ignoringDepth > 0;
+	}
+
 	/** Runs a change made by the renderer: an event it causes is not from the user. */
 	ignoringEvents(change: () => void): void {
-		this.ignoring++;
+		this.ignoringDepth++;
 		try {
 			change();
 		} finally {
-			this.ignoring--;
+			this.ignoringDepth--;
 		}
 	}
 
@@ -83,7 +88,7 @@ class EventScope {
 
 	/** Runs a handler of the user, and commits what it changed. */
 	run(handler: () => void, afterwards?: () => void): void {
-		if (this.ignoring > 0) {
+		if (this.ignoringDepth > 0) {
 			return;
 		}
 		this.wrap(() => {
@@ -407,6 +412,87 @@ const measureEvent = new NativeEvent(r.Rcustom_set_measure_callback, (handlerOf)
 	}
 }));
 
+/** A function waiting for the next frame, with what makes it the one of its kind. */
+interface Waiting {
+	readonly key: string | null;
+	readonly run: () => void;
+}
+
+/**
+ * Functions run at the start of the next frame, through `Rtask_post`: the events a widget gives
+ * while Raven paints, when the tree must not change under it. One native callback for them all,
+ * and one task of Raven for each function, which runs that one: in the order of the tasks of the
+ * application around them.
+ */
+class NextFrame {
+	private readonly queue: Waiting[] = [];
+	private callback: NativeCallback | null = null;
+
+	/**
+	 * Runs a function at the start of the next frame, after those posted before it. With a key, it is
+	 * not posted while one of that key waits: that one runs instead.
+	 */
+	post(run: () => void, key: string | null = null): void {
+		if (key !== null && this.queue.some((waiting) => waiting.key === key)) {
+			return;
+		}
+		this.queue.push({ key, run });
+		this.callback ??= nativeCallback(["pointer"], "void", () => this.queue.shift()?.run());
+		r.Rtask_post(this.callback, null);
+	}
+
+	/** Forgets what waits: Raven stopped, and dropped its tasks. */
+	clear(): void {
+		this.queue.length = 0;
+	}
+
+	/** How many functions wait, for the tests. */
+	get size(): number {
+		return this.queue.length;
+	}
+}
+
+export const nextFrame = new NextFrame();
+
+/** Gives each event of `nextFrameEvent` a name of its own, for the key of what waits. */
+let nextFrameEvents = 0;
+
+/**
+ * An event C may give while it paints, as a MapView whose zoom or glide ends in a frame: the
+ * function is called at the start of the next frame, where what it changes cannot pull a widget
+ * from under the paint. Once for the changes of a frame, with what the widget holds then (`read`):
+ * not a value it has already left, which a function that follows it would take it back to. What
+ * the renderer causes is still not from the user.
+ */
+function nextFrameEvent(connect: Connect, args: readonly NativeArg[], read: (widget: r.Rid) => readonly number[]): NativeEvent {
+	const name = `event${++nextFrameEvents}`;
+	return new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", ...args], "void", (id) => {
+		if (eventScope.ignoring) {
+			return;
+		}
+		const widget = widgetOf(id);
+		nextFrame.post(() => {
+			const handler = handlerOf(widget) as ((...values: number[]) => void) | undefined;
+			if (handler && r.Rwidget_is_valid(widget)) {
+				eventScope.run(() => handler(...read(widget)), () => controlledSync.run(widget));
+			}
+		}, `${name}:${widget}`);
+	}));
+}
+
+/**
+ * An event C calls while a frame is drawn, as a MapView asks for its tiles: what it gives as it is,
+ * and nothing committed after it, as for `OnPaint`. `args` are the types after the widget.
+ */
+function drawnEvent(connect: Connect, args: readonly NativeArg[]): NativeEvent {
+	return new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", ...args], "void", (id, ...values) => {
+		const handler = handlerOf(widgetOf(id)) as ((...values: NativeValue[]) => void) | undefined;
+		if (handler) {
+			eventScope.guard(() => handler(...values.slice(0, args.length)));
+		}
+	}));
+}
+
 /**
  * The events with a value, by tag. `OnClicked`, `OnChanged`, `OnCommitted` and `OnActivated`
  * as XML attributes all set the one action of a widget, without a value, and for a TextInput
@@ -464,6 +550,23 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 		OnSeriesToggled: indexAndFlagEvent(r.Rplot_set_series_toggled_callback),
 	},
 	Breadcrumb: { OnClicked: indexEvent(r.Rbreadcrumb_set_clicked_callback) },
+	// (the page from 0, as the attribute Page counts it; the user's, or the autoplay's)
+	Carousel: { OnChanged: indexEvent(r.Rcarousel_set_page_changed_callback) },
+	// (OnClicked, the action of either, says nothing of which: these do)
+	Chart: {
+		OnSliceClicked: indexAndFlagEvent(r.Rchart_set_slice_clicked_callback),
+		OnCellClicked: directEvent(r.Rchart_set_cell_clicked_callback, ["i32", "i32", "f32"]),
+	},
+	MapView: {
+		// (also at the end of a zoom or of a glide, which C gives as it paints: a frame later here)
+		OnChanged: nextFrameEvent(r.Rmap_view_set_view_changed_callback, ["f64", "f64", "f64"], (map) => [...r.Rmap_view_get_center(map), r.Rmap_view_get_zoom(map)]),
+		// (the id of the marker, from 1: those of Markup in their order, then those Rmap_view_add_marker adds)
+		OnMarkerClicked: indexEvent(r.Rmap_view_set_marker_clicked_callback),
+		// (asked as the map is drawn: answered with Rmap_view_set_tile, at once or later. Giving or
+		// taking this prop away empties the tiles the map holds, as C does when its source changes)
+		OnTile: drawnEvent(r.Rmap_view_set_tile_callback, ["i32", "i32", "i32"]),
+		OnTileCancelled: drawnEvent(r.Rmap_view_set_tile_cancel_callback, ["i32", "i32", "i32"]),
+	},
 	Toast: { OnClicked: toastActionEvent },
 	TextEditor: {
 		OnChanged: readEvent(r.Rtext_editor_set_changed_callback, [], (widget) => r.Rtext_editor_get_text(widget) ?? ""),
@@ -626,6 +729,8 @@ export const EVENT_VALUE_TYPES: Readonly<Record<string, Readonly<Record<string, 
 	Rating: { OnChanged: "number" },
 	Pagination: { OnChanged: "number" },
 	PdfView: { OnChanged: "number" },
+	Carousel: { OnChanged: "number" },
+	MapView: { OnChanged: "latitude: number, longitude: number, zoom: number" },
 	Plot: { OnChanged: "line: number, value: number" },
 	Breadcrumb: { OnClicked: "number" },
 	TextEditor: { OnChanged: "string" },
@@ -737,6 +842,17 @@ export const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
 		"readonly OnCanvasActivated?: (x: number, y: number) => void",
 		"readonly OnWireDropped?: (pin: number, x: number, y: number) => void",
 		"readonly OnPinClicked?: (pin: number, x: number, y: number) => void",
+		MARKUP,
+	],
+	Chart: [
+		"readonly OnSliceClicked?: (slice: number, selected: boolean) => void",
+		"readonly OnCellClicked?: (row: number, column: number, value: number) => void",
+		MARKUP,
+	],
+	MapView: [
+		"readonly OnMarkerClicked?: (marker: number) => void",
+		"readonly OnTile?: (z: number, x: number, y: number) => void",
+		"readonly OnTileCancelled?: (z: number, x: number, y: number) => void",
 		MARKUP,
 	],
 	BlockEditor: [

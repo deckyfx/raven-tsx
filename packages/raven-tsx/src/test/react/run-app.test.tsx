@@ -1,4 +1,4 @@
-/** How `runApp` ends. It asks for Vulkan, so here the start is sent to a Raven without a window system or a GPU. */
+/** How `runApp` ends. It asks for a GPU, so here the start is sent to a Raven without a window system or a GPU. */
 
 import { afterAll, beforeAll, expect, spyOn, test, type Mock } from "bun:test";
 import { useLayoutEffect, type ReactNode } from "react";
@@ -7,10 +7,13 @@ import { runApp } from "../../react/index";
 
 const init = r.Rinit_ex;
 let starts: Mock<typeof r.Rinit_ex>;
+/** The backend each start asked for, before it is sent to the null one. */
+const asked: number[] = [];
 
 beforeAll(() => {
 	starts = spyOn(r, "Rinit_ex").mockImplementation((desc) => {
 		if (desc) {
+			asked.push(desc.backend);
 			desc.backend = r.R_BACKEND_NULL;
 			desc.headless = 1;
 		}
@@ -55,4 +58,11 @@ test("the effects are cleaned up before Raven stops when the run of runApp ends 
 	await expect(runApp(<App />)).rejects.toThrow("in the loop");
 	loop.mockRestore();
 	expect(runningAtCleanup).toBe(true);
+});
+
+test("runApp asks for Raven's default backend (Metal on macOS, Vulkan elsewhere), or the one its options say", async () => {
+	asked.length = 0;
+	await runApp(null, undefined, { setup: () => r.Rquit(0) });
+	await runApp(null, undefined, { setup: () => r.Rquit(0), backend: r.R_BACKEND_VULKAN });
+	expect(asked).toEqual([r.R_BACKEND_DEFAULT, r.R_BACKEND_VULKAN]);
 });

@@ -29,6 +29,30 @@
         "@types/react": "^19",
       },
     },
+    "examples/carousel": {
+      "name": "example-carousel",
+      "dependencies": {
+        "@decky.fx/raven-tsx": "workspace:*",
+        "react": "^19.3.0",
+        "react-reconciler": "^0.34.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/react": "^19",
+      },
+    },
+    "examples/charts": {
+      "name": "example-charts",
+      "dependencies": {
+        "@decky.fx/raven-tsx": "workspace:*",
+        "react": "^19.3.0",
+        "react-reconciler": "^0.34.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/react": "^19",
+      },
+    },
     "examples/components": {
       "name": "example-components",
       "dependencies": {
@@ -102,6 +126,18 @@
       },
       "peerDependencies": {
         "typescript": "^6",
+      },
+    },
+    "examples/map": {
+      "name": "example-map",
+      "dependencies": {
+        "@decky.fx/raven-tsx": "workspace:*",
+        "react": "^19.3.0",
+        "react-reconciler": "^0.34.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/react": "^19",
       },
     },
     "examples/memory": {
@@ -365,6 +401,10 @@
 
     "example-browser": ["example-browser@workspace:examples/browser"],
 
+    "example-carousel": ["example-carousel@workspace:examples/carousel"],
+
+    "example-charts": ["example-charts@workspace:examples/charts"],
+
     "example-components": ["example-components@workspace:examples/components"],
 
     "example-editor": ["example-editor@workspace:examples/editor"],
@@ -374,6 +414,8 @@
     "example-glass": ["example-glass@workspace:examples/glass"],
 
     "example-hello": ["example-hello@workspace:examples/hello"],
+
+    "example-map": ["example-map@workspace:examples/map"],
 
     "example-memory": ["example-memory@workspace:examples/memory"],
 

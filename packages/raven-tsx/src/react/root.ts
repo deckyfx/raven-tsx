@@ -2,6 +2,7 @@ import { createElement, type ReactNode, type ReactPortal } from "react";
 import { ConcurrentRoot } from "react-reconciler/constants.js";
 import * as r from "../core/raven";
 import { RavenError } from "../core/errors";
+import { nextFrame } from "../core/events";
 import { resolveProps, type RavenProps } from "../core/props";
 import type { WindowOptions } from "../core/props.generated";
 import { WidgetInstance } from "../core/widget-instance";
@@ -82,6 +83,12 @@ export interface RunOptions {
 	readonly setup?: (() => void) | undefined;
 	/** Raven's allocator: functions of C only, as it allocates on several threads. See `Rset_allocator`. */
 	readonly allocator?: Parameters<typeof r.Rset_allocator>[0] | undefined;
+	/**
+	 * What draws: Raven's default by default, Metal on macOS and Vulkan elsewhere.
+	 * `R_BACKEND_VULKAN` for what Metal cannot run: a Vulkan `Viewport`, effects given as SPIR-V
+	 * (`Rshader_create`). On macOS it then needs MoltenVK.
+	 */
+	readonly backend?: r.RBackend | undefined;
 }
 
 /**
@@ -97,7 +104,7 @@ export async function runApp(element: ReactNode, options?: WindowOptions, start?
 		r.Rset_allocator(start.allocator);
 	}
 	const desc = new r.RInitDesc();
-	desc.backend = r.R_BACKEND_VULKAN;
+	desc.backend = start?.backend ?? r.R_BACKEND_DEFAULT;
 	desc.app_name = start?.appName ?? null;
 	if (!r.Rinit_ex(desc)) {
 		RavenError.fromLibrary("Raven cannot start");
@@ -114,6 +121,8 @@ export async function runApp(element: ReactNode, options?: WindowOptions, start?
 			root?.unmount();
 		} finally {
 			r.Rshutdown();
+			// (the tasks Raven dropped as it stopped: what waited for them would wait for ever)
+			nextFrame.clear();
 		}
 	}
 }

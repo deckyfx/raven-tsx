@@ -5,9 +5,9 @@ import { ptr, type Pointer } from "bun:ffi";
 import { tmpdir } from "node:os";
 import { createContext, createRef, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import * as r from "../../core/raven";
-import { eventStats } from "../../core/events";
+import { eventStats, nextFrame } from "../../core/events";
 import {
-	BlockEditor, Button, ColorPicker, createPortal, createWindow, Custom, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
+	BlockEditor, Button, Carousel, Chart, ColorPicker, createPortal, createWindow, Custom, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
 	type WidgetInstance, type WindowInstance,
 } from "../../react/index";
 
@@ -1219,3 +1219,349 @@ test("a PdfView says when its page changes, and a Window when the keyboard on th
 	expect(eventStats().handlers).toBe(listening - 2);
 	windows.unmount();
 });
+
+test("a Table and a ListView of rows asked for as they are drawn take a Selected that comes before their rows", async () => {
+	await mount(
+		<VBox>
+			<Table Name="t" Height={120} Columns={["A"]} RowCount={4} CellText={(row) => `row ${row}`} Selected={2} />
+			<ListView Name="l" Height={80} ItemCount={4} ItemText={(index) => `item ${index}`} Selected={2} />
+		</VBox>,
+	);
+	expect(r.Rtable_get_selected(find("t"))).toBe(2);
+	expect(r.Rlist_view_get_selected(find("l"))).toBe(2);
+});
+
+test("a Table that selects several rows takes a Selected given before its rows once they come, then keeps the user's", async () => {
+	const table = createRef<WidgetInstance>();
+	function Rows({ count }: { count: number }): ReactNode {
+		return <VBox><Table ref={table} Name="t" Height={200} Columns={["A"]} RowCount={count} CellText={(row) => `row ${row}`} MultiSelect Selected={2} OnChanged={() => {}} /></VBox>;
+	}
+	await mount(<Rows count={0} />);
+	expect(r.Rtable_get_selected(find("t"))).toBe(-1);
+	root?.render(<Rows count={4} />);
+	await settle();
+	expect(r.Rtable_get_selected(find("t"))).toBe(2);
+	// (taken: the rows the user selects stay when the rows change)
+	table.current?.focus();
+	press(r.R_KEY_DOWN, r.R_MOD_SHIFT);
+	await settle();
+	expect(r.Rtable_get_selection_count(find("t"))).toBe(2);
+	root?.render(<Rows count={5} />);
+	await settle();
+	expect(r.Rtable_get_selection_count(find("t"))).toBe(2);
+});
+
+test("a Table that selects several rows takes again a new Selected it refused, once its row comes", async () => {
+	// (the same functions at each render, as useCallback gives: only RowCount says the rows changed)
+	const cellText = (row: number): string => `row ${row}`;
+	const changed = (): void => {};
+	function Rows({ count, selected }: { count: number; selected: number }): ReactNode {
+		return <VBox><Table Name="t" Height={200} Columns={["A"]} RowCount={count} CellText={cellText} MultiSelect Selected={selected} OnChanged={changed} /></VBox>;
+	}
+	await mount(<Rows count={4} selected={1} />);
+	expect(r.Rtable_get_selected(find("t"))).toBe(1);
+	// (row 9 is not there yet: refused, and given again with the rows)
+	root?.render(<Rows count={4} selected={9} />);
+	await settle();
+	root?.render(<Rows count={10} selected={9} />);
+	await settle();
+	expect(r.Rtable_get_selected(find("t"))).toBe(9);
+});
+
+test("a Table that selects several rows keeps the user's rows after an event, whatever Selected says", async () => {
+	const changes: number[] = [];
+	const table = createRef<WidgetInstance>();
+	function Rows({ multiple }: { multiple: boolean }): ReactNode {
+		return (
+			<VBox>
+				<Table ref={table} Name="t" Height={200} Columns={["A"]} RowCount={4} CellText={(row) => `row ${row}`} MultiSelect={multiple} Selected={0} OnChanged={(row) => changes.push(row)} />
+			</VBox>
+		);
+	}
+	await mount(<Rows multiple />);
+	const widget = find("t");
+	table.current?.focus();
+	press(r.R_KEY_DOWN, r.R_MOD_SHIFT);
+	await settle();
+	// (rows 0 and 1, though Selected still says 0: putting it back would make them one)
+	expect(changes).toEqual([1]);
+	expect(r.Rtable_get_selection_count(widget)).toBe(2);
+	expect(r.Rtable_get_selected(widget)).toBe(1);
+	// (one row at a time: what Selected says comes back after the event, as for a ListView)
+	root?.render(<Rows multiple={false} />);
+	await settle();
+	press(r.R_KEY_DOWN);
+	await settle();
+	expect(r.Rtable_get_selected(find("t"))).toBe(0);
+});
+
+/** A drag of the left button, in steps, as a hand moves. */
+function dragFrom(x: number, y: number, dx: number, dy: number): void {
+	r.Rwindow_inject_mouse_move(window, x, y);
+	r.Rwindow_inject_mouse_button(window, r.R_MOUSE_LEFT, 1);
+	for (let step = 1; step <= 8; step++) {
+		r.Rwindow_inject_mouse_move(window, x + (dx * step) / 8, y + (dy * step) / 8);
+	}
+	r.Rwindow_inject_mouse_button(window, r.R_MOUSE_LEFT, 0);
+}
+
+test("a Carousel says the page the user goes to, from 0, and holds the Page its prop says", async () => {
+	const pages: number[] = [];
+	function Pages({ follow }: { follow: boolean }): ReactNode {
+		const [page, setPage] = useState(0);
+		return (
+			<VBox>
+				<Carousel Name="c" Height={160} Page={page} OnChanged={(next) => { pages.push(next); if (follow) setPage(next); }}>
+					<Label Text="one" /><Label Text="two" /><Label Text="three" />
+				</Carousel>
+			</VBox>
+		);
+	}
+	await mount(<Pages follow />);
+	let carousel = find("c");
+	expect(r.Rcarousel_get_page_count(carousel)).toBe(3);
+	let [x, y, width, height] = r.Rwidget_get_rect(carousel);
+	clickAt(x + width / 2, y + height / 2);
+	press(r.R_KEY_RIGHT);
+	await settle();
+	expect(pages).toEqual([1]);
+	expect(r.Rcarousel_get_page(carousel)).toBe(1);
+	// (a page the state does not follow: the widget goes back to the one its prop says)
+	root?.unmount();
+	root = null;
+	r.Rwindow_destroy(window);
+	window = r.R_INVALID_ID;
+	pages.length = 0;
+	await mount(<Pages follow={false} />);
+	carousel = find("c");
+	[x, y, width, height] = r.Rwidget_get_rect(carousel);
+	clickAt(x + width / 2, y + height / 2);
+	press(r.R_KEY_RIGHT);
+	await settle();
+	expect(pages).toEqual([1]);
+	expect(r.Rcarousel_get_page(carousel)).toBe(0);
+});
+
+test("a Chart is filled by Markup, says the slice and the cell clicked, and holds the Selected its prop says", async () => {
+	const slices: Array<[number, boolean]> = [];
+	const cells: number[][] = [];
+	function Charts({ follow }: { follow: boolean }): ReactNode {
+		const [selected, setSelected] = useState(-1);
+		return (
+			<VBox>
+				<Chart
+					Name="pie"
+					Kind="Pie"
+					Height={200}
+					Selected={selected}
+					Markup={'<Slice Label="a" Value="1"/><Slice Label="b" Value="1"/>'}
+					OnSliceClicked={(slice, on) => { slices.push([slice, on]); if (follow) setSelected(on ? slice : -1); }}
+				/>
+				<Chart Name="heat" Kind="Heatmap" Height={120} Markup={'<Row Label="r" Values="1 2 3"/>'} OnCellClicked={(row, column, value) => cells.push([row, column, value])} />
+			</VBox>
+		);
+	}
+	await mount(<Charts follow />);
+	const pie = find("pie");
+	let [x, y, width, height] = r.Rwidget_get_rect(pie);
+	clickAt(x + width / 2, y + height / 2);
+	await settle();
+	expect(slices.length).toBe(1);
+	const [slice = -1] = slices[0] ?? [];
+	expect(slice).toBeGreaterThanOrEqual(0);
+	expect(r.Rchart_get_selected(pie)).toBe(slice);
+	[x, y, width, height] = r.Rwidget_get_rect(find("heat"));
+	clickAt(x + width / 2, y + height / 2);
+	expect(cells.length).toBe(1);
+	expect(cells[0]?.[0]).toBe(0);
+	expect([1, 2, 3]).toContain(cells[0]?.[2] ?? 0);
+	// (a selection the state does not follow goes back to the prop's)
+	root?.render(<Charts follow={false} />);
+	await settle();
+	slices.length = 0;
+	const [px, py, pwidth, pheight] = r.Rwidget_get_rect(find("pie"));
+	clickAt(px + pwidth / 2, py + pheight / 2);
+	await settle();
+	expect(slices.length).toBe(1);
+	expect(r.Rchart_get_selected(find("pie"))).toBe(slice);
+});
+
+test("a MapView asks for its tiles as it is drawn, says its marker clicked, and where the user moved it", async () => {
+	const asked: number[][] = [];
+	const views: number[][] = [];
+	const markers: number[] = [];
+	const pixels = new Uint8Array(16 * 16 * 4).fill(200);
+	function Map({ follow }: { follow: boolean }): ReactNode {
+		const [center, setCenter] = useState<readonly [number, number]>([0, 0]);
+		return (
+			<VBox>
+				<MapView
+					Name="map"
+					Height={256}
+					Latitude={center[0]}
+					Longitude={center[1]}
+					Zoom={1}
+					Markup={'<Marker Latitude="40" Longitude="-60" Label="there"/><Marker Latitude="0" Longitude="0" Label="here"/>'}
+					OnTile={(z, x, y) => {
+						asked.push([z, x, y]);
+						r.Rmap_view_set_tile(find("map"), z, x, y, ptr(pixels), 16, 16);
+					}}
+					OnMarkerClicked={(marker) => markers.push(marker)}
+					OnChanged={(latitude, longitude, zoom) => {
+						views.push([latitude, longitude, zoom]);
+						if (follow) {
+							setCenter([latitude, longitude]);
+						}
+					}}
+				/>
+			</VBox>
+		);
+	}
+	await mount(<Map follow />);
+	await settle();
+	const map = find("map");
+	expect(asked.length).toBeGreaterThan(0);
+	const [z = 0, tx = 0, ty = 0] = asked[0] ?? [];
+	expect(r.Rmap_view_get_tile_state(map, z, tx, ty)).toBe(r.R_MAP_TILE_LOADED);
+	const [x, y, width, height] = r.Rwidget_get_rect(map);
+	dragFrom(x + width / 2 + 60, y + height / 2 + 40, 50, 0);
+	await settle();
+	expect(views.length).toBeGreaterThan(0);
+	const [latitude = 0, longitude = 0, zoom = 0] = views.at(-1) ?? [];
+	expect(longitude).not.toBe(0);
+	expect(zoom).toBeCloseTo(1, 5);
+	// (the state followed: the widget is where the user left it)
+	expect(r.Rmap_view_get_center(map)[1]).toBeCloseTo(longitude, 5);
+	expect(r.Rmap_view_get_center(map)[0]).toBeCloseTo(latitude, 5);
+	// (the second marker of Markup: its id is 2, as ids count from 1. The point is in the widget)
+	const [mx, my] = r.Rmap_view_latlon_to_screen(map, 0, 0);
+	clickAt(x + mx, y + my - 6);
+	expect(markers).toEqual([2]);
+	// (a view the state does not follow stays where the user left it, through the events of the
+	// widget after it: its props did not change)
+	root?.render(<Map follow={false} />);
+	await settle();
+	views.length = 0;
+	dragFrom(x + width / 2 + 60, y + height / 2 + 40, 50, 0);
+	await settle();
+	const [, moved = 0] = views.at(-1) ?? [];
+	expect(moved).not.toBeCloseTo(longitude, 3);
+	const [ax, ay] = r.Rmap_view_latlon_to_screen(map, 0, 0);
+	clickAt(x + ax, y + ay - 6);
+	await settle();
+	expect(markers).toEqual([2, 2]);
+	expect(r.Rmap_view_get_center(map)[1]).toBeCloseTo(moved, 5);
+});
+
+test("a MapView whose glide ends as it paints says so at the next frame, where the tree may change", async () => {
+	const views: number[] = [];
+	function Glide(): ReactNode {
+		const [after, setAfter] = useState(true);
+		return (
+			<VBox>
+				<MapView Name="map" Height={200} Zoom={1} OnChanged={(_latitude, _longitude, zoom) => { views.push(zoom); setAfter(false); }} />
+				{after && <Label Name="after">painted after the map</Label>}
+			</VBox>
+		);
+	}
+	await mount(<Glide />);
+	const map = find("map");
+	r.Rset_animations_enabled(1);
+	try {
+		r.Rmap_view_animate_to(map, 10, 20, 3);
+		// (frame after frame until C gives the end of the glide as it paints: the function waits)
+		const end = performance.now() + 3000;
+		while (nextFrame.size === 0 && performance.now() < end) {
+			r.Rdraw_frame();
+			await new Promise<void>((resolve) => setTimeout(resolve, 4));
+		}
+		expect(nextFrame.size).toBeGreaterThan(0);
+		expect(views).toEqual([]);
+		expect(r.Rwidget_is_valid(find("after"))).toBe(1);
+		// (the next frame calls it, before it paints: the label goes, and nothing paints it)
+		r.Rdraw_frame();
+		expect(views.length).toBeGreaterThan(0);
+		await settle();
+		expect(find("after")).toBe(r.R_INVALID_ID);
+	} finally {
+		r.Rset_animations_enabled(0);
+	}
+});
+
+test("a MapView takes its place and zoom in double precision, for a change smaller than the tolerance of other numbers", async () => {
+	function Place({ longitude, latitude, zoom }: { longitude: number; latitude: number; zoom: number }): ReactNode {
+		return <VBox><MapView Name="map" Height={120} MaxZoom={24} Zoom={zoom} Latitude={latitude} Longitude={longitude} /></VBox>;
+	}
+	await mount(<Place longitude={100} latitude={45} zoom={24} />);
+	// (pixels at zoom 24: a float, as the attributes of Raven 0.3.0 read them, would keep 100 and 45)
+	root?.render(<Place longitude={100.000001} latitude={45.0000013} zoom={23.0000001} />);
+	await settle();
+	const [latitude, longitude] = r.Rmap_view_get_center(find("map"));
+	expect(longitude).toBeCloseTo(100.000001, 9);
+	expect(latitude).toBeCloseTo(45.0000013, 9);
+	expect(r.Rmap_view_get_zoom(find("map"))).toBeCloseTo(23.0000001, 12);
+	// (the other coordinate stays: only Longitude changes)
+	root?.render(<Place longitude={100.000002} latitude={45.0000013} zoom={23.0000001} />);
+	await settle();
+	expect(r.Rmap_view_get_center(find("map"))[0]).toBeCloseTo(45.0000013, 9);
+});
+
+test("what waits for the next frame runs in the order of the tasks of the application around it", async () => {
+	const order: string[] = [];
+	nextFrame.post(() => order.push("first"));
+	r.Rtask_post(() => void order.push("the application's"));
+	nextFrame.post(() => order.push("last"));
+	r.Rdraw_frame();
+	expect(order).toEqual(["first", "the application's", "last"]);
+	expect(nextFrame.size).toBe(0);
+});
+
+test("a MapView says once a frame where it is, as it is when it is said: not a place it has left", async () => {
+	const views: number[][] = [];
+	await mount(<VBox><MapView Name="map" Height={240} Zoom={3} OnChanged={(latitude, longitude, zoom) => views.push([latitude, longitude, zoom])} /></VBox>);
+	const map = find("map");
+	const [x, y, width, height] = r.Rwidget_get_rect(map);
+	// (a drag of several moves in one frame: C says each, the function hears the last)
+	r.Rwindow_inject_mouse_move(window, x + width / 2, y + height / 2);
+	r.Rwindow_inject_mouse_button(window, r.R_MOUSE_LEFT, 1);
+	for (let step = 1; step <= 5; step++) {
+		r.Rwindow_inject_mouse_move(window, x + width / 2 + step * 10, y + height / 2);
+	}
+	r.Rwindow_inject_mouse_button(window, r.R_MOUSE_LEFT, 0);
+	expect(nextFrame.size).toBe(1);
+	// (and moved elsewhere before the next frame, by the application: that is where it is)
+	r.Rmap_view_set_center(map, 0, 42);
+	r.Rdraw_frame();
+	expect(views.length).toBe(1);
+	expect(views[0]?.[1]).toBeCloseTo(r.Rmap_view_get_center(map)[1], 9);
+	expect(views[0]?.[1]).toBeCloseTo(42, 9);
+});
+
+test("a Carousel shows the Page of its props from the start, after a remake, and once the page comes", async () => {
+	function Pages({ count, page, loop }: { count: number; page: number; loop?: boolean }): ReactNode {
+		return (
+			<VBox>
+				<Carousel Name="c" Height={120} Page={page} {...(loop === undefined ? {} : { Loop: loop })}>
+					{Array.from({ length: count }, (_, index) => <Label key={index}>{`page ${index}`}</Label>)}
+				</Carousel>
+			</VBox>
+		);
+	}
+	await mount(<Pages count={3} page={1} />);
+	expect(r.Rcarousel_get_page(find("c"))).toBe(1);
+	// (a remake, as an attribute goes: the new widget gets its pages, then the page)
+	root?.render(<Pages count={3} page={2} loop />);
+	await settle();
+	root?.render(<Pages count={3} page={2} />);
+	await settle();
+	expect(r.Rcarousel_get_page(find("c"))).toBe(2);
+	// (a page asked for before it is there is shown when it comes)
+	root?.render(<Pages count={1} page={0} />);
+	await settle();
+	root?.render(<Pages count={1} page={2} />);
+	await settle();
+	root?.render(<Pages count={3} page={2} />);
+	await settle();
+	expect(r.Rcarousel_get_page(find("c"))).toBe(2);
+});
+

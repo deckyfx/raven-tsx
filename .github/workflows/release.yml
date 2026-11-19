@@ -73,28 +73,12 @@ jobs:
           package-manager-cache: false
 
       # the addon of Raven's Node.js binding, for the package of this platform
+      # (on Windows, Raven's CMake downloads the headers and node.lib of the Node.js above)
       - name: Build the addon of the Node.js binding
-        if: runner.os != 'Windows'
         working-directory: raven-source
         run: |
           cmake -S bindings/node -B build-node ${{ matrix.cmake }} -DCMAKE_BUILD_TYPE=Release
           cmake --build build-node --config Release --parallel
-
-      # Raven's CMake leaves it out on Windows, where it links against node.lib: the one of the
-      # Node.js above, with its headers, from nodejs.org, and a CMake project of this package
-      - name: Build the addon of the Node.js binding (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          version="$(node -v)"
-          mkdir -p node-api
-          curl -fsSL "https://nodejs.org/dist/$version/node-$version-headers.tar.gz" | tar -xz -C node-api
-          curl -fsSL -o node-api/node.lib "https://nodejs.org/dist/$version/win-x64/node.lib"
-          here="$(cygpath -m "$PWD")"
-          cmake -S packages/raven-tsx/addon -B raven-source/build-node -A x64 \
-            -DRAVEN_SOURCE="$here/raven-source" \
-            -DNODE_INCLUDE_DIR="$here/node-api/node-$version/include/node" \
-            -DNODE_LIBRARY="$here/node-api/node.lib"
-          cmake --build raven-source/build-node --config Release
 
       - uses: oven-sh/setup-bun@v2
         with:

@@ -51,6 +51,9 @@ export const Switcher = tag<Props.SwitcherProps>("Switcher");
 /** Its children as tabs (Slot.Title). */
 export const TabView = tag<Props.TabViewProps>("TabView");
 
+/** Its children as pages shown one at a time, swiped, with dots and arrows. */
+export const Carousel = tag<Props.CarouselProps>("Carousel");
+
 /** A header that shows and hides one child. */
 export const Expander = tag<Props.ExpanderProps>("Expander");
 
@@ -156,8 +159,14 @@ export const Rating = tag<Props.RatingProps>("Rating");
 /** Page numbers with previous and next. */
 export const Pagination = tag<Props.PaginationProps>("Pagination");
 
+/** A map of slippy-map tiles (Web Mercator z/x/y) given by the application or read from files: dragged, zoomed, with Marker elements (Latitude, Longitude, Label, Color). */
+export const MapView = tag<Props.MapViewProps>("MapView");
+
 /** The pages of a PDF document, scrolled and zoomed (drawn by PDFium, loaded at run time). */
 export const PdfView = tag<Props.PdfViewProps>("PdfView");
+
+/** The charts of dashboards: a pie or a donut of Slice elements (Label, Value, Color), a gauge with Band elements (From, To, Color), a heatmap of Row elements (Label, Values), a sparkline of Values. */
+export const Chart = tag<Props.ChartProps>("Chart");
 
 /** Curves of X / Y data: Series elements (Name, Color, Line, LineWidth, Marker, MarkerSize, MarkerFilled, Step, Fill, XAxis, Axis, MaxPoints, X and Y lists or Points "x,y x,y"), Scatter elements, and DragLine elements (Axis, Value, Label, Color). */
 export const Plot = tag<Props.PlotProps>("Plot");
