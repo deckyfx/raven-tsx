@@ -23,6 +23,7 @@ export * from "../core";
 export * from "./components.generated";
 export { Portal } from "./portal";
 export { createAction, createFrame, createShortcut } from "./primitives";
+export type { JSX } from "./jsx-runtime";
 export { createWindow, RavenRoot, runApp, type RunOptions } from "./root";
 export { tag, type SolidProps } from "./tag";
 export { registerTag, type TagOptions } from "./tags";

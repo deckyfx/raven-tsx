@@ -1,8 +1,9 @@
 /**
  * The Bun plugin that runs an application of `@decky.fx/raven-tsx/solid`. Bun compiles JSX as
- * React does; Solid compiles it to calls of its renderer, with Babel (`babel-preset-solid`, in its
- * universal mode, for the renderer of `@decky.fx/raven-tsx/solid/renderer`). And on Bun, `solid-js`
- * resolves to its build for servers, which does not react: the plugin loads the one for clients.
+ * React does; Solid compiles it to calls of its renderer, with its own compiler (`@solidjs/compiler`,
+ * in its universal mode, for the renderer of `@decky.fx/raven-tsx/solid/renderer`), each line of
+ * the result on the line of the source (see `./lines`). And on Bun, `solid-js` resolves to its build
+ * for servers, which does not react: the plugin loads the one for clients.
  *
  * To run: `preload = ["@decky.fx/raven-tsx/solid/preload"]` in bunfig.toml. To build:
  *
@@ -11,9 +12,10 @@
 
 import type { BunPlugin } from "bun";
 import { readFileSync, realpathSync } from "node:fs";
-import { dirname, resolve, sep } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertSolidVersion, installedPackage, isRendererFile, isTypeScript, solidBabelOptions, SOURCES } from "./compile";
+import { assertSolidVersion, installedPackage, isRendererFile, isTypeScript, solidCompiler, SOURCES, type SolidCompile, type SolidOutput } from "./compile";
+import { retainLines } from "./lines";
 
 /** What the plugin can be told. */
 export interface SolidPluginOptions {
@@ -40,12 +42,13 @@ function pick(entry: ExportsEntry | undefined, conditions: readonly string[]): s
 	return undefined;
 }
 
-/** The files of Solid for servers, by package folder and build, each with the file for clients that replaces it. */
+/** The files of Solid that Bun would load, by package folder and build, each with the file for clients that replaces it. */
 const clientFiles = new Map<string, ReadonlyMap<string, string>>();
 
 /**
- * What replaces each build of a solid-js for servers: the one a client would take for the same
- * import, as Node picks them from `exports` (Bun takes `node` and finds the server's).
+ * What replaces each file of a package of Solid that Bun takes (`node`: the build of solid-js for
+ * servers): the one a client would take for the same import, as Node picks them from `exports`.
+ * With `development`, the development builds: those of solid-js need those of @solidjs/signals.
  */
 function clientFilesOf(root: string, development: boolean): ReadonlyMap<string, string> {
 	const key = `${root}\0${development}`;
@@ -55,10 +58,13 @@ function clientFilesOf(root: string, development: boolean): ReadonlyMap<string, 
 		const map = new Map<string, string>();
 		for (const entry of Object.values(exports)) {
 			for (const style of ["import", "require"]) {
-				const server = pick(entry, ["node", style, "default"]);
-				const client = pick(entry, development ? ["browser", "development", style, "default"] : ["browser", style, "default"]);
-				if (server && client && server !== client) {
-					map.set(resolve(root, server), resolve(root, client));
+				// (Bun takes the development builds itself when it builds without minifying: those too)
+				for (const bunDevelopment of [false, true]) {
+					const server = pick(entry, ["node", ...(bunDevelopment ? ["development"] : []), style, "default"]);
+					const client = pick(entry, ["browser", ...(bunDevelopment || development ? ["development"] : []), style, "default"]);
+					if (server && client && server !== client) {
+						map.set(resolve(root, server), resolve(root, client));
+					}
 				}
 			}
 		}
@@ -68,8 +74,49 @@ function clientFilesOf(root: string, development: boolean): ReadonlyMap<string, 
 	return files;
 }
 
-/** The folder of the solid-js package a file of it is in. */
-const solidRoot = (path: string): string => path.slice(0, path.lastIndexOf(`${sep}solid-js${sep}`) + `${sep}solid-js`.length);
+/**
+ * The packages of Solid whose builds the plugin may replace: solid-js (its build for servers), and
+ * for the development builds the packages it imports, which have no build for servers.
+ */
+const SOLID_FOLDERS = ["solid-js", join("@solidjs", "signals"), join("@solidjs", "universal")];
+
+/** The files of solid-js for servers, which the plugin replaces: `server.js`, `server.dev.js`... */
+const SERVER_FILES = /[\\/]solid-js[\\/].*server(?:\.\w+)?\.c?js$/;
+
+/** The files of the packages of Solid, of which the development builds replace some. */
+const SOLID_FILES = /[\\/](?:solid-js|@solidjs[\\/](?:signals|universal))[\\/].*\.c?js$/;
+
+/** The folder of the package of Solid a file is in: the deepest, for one inside another's node_modules. */
+function solidRoot(path: string): string {
+	let root = "";
+	for (const name of SOLID_FOLDERS) {
+		const at = path.lastIndexOf(`${sep}${name}${sep}`);
+		if (at >= 0 && at + name.length + 1 > root.length) {
+			root = path.slice(0, at + name.length + 1);
+		}
+	}
+	return root;
+}
+
+/**
+ * The compiled code with its lines on those of the source: Bun reads no source map of a plugin, and
+ * an error says the line it runs. Only when Bun reads it as the same program (a line break moved in
+ * a text would change it): else as it was compiled.
+ */
+function onSourceLines({ code, map }: SolidOutput, loader: "ts" | "js"): string {
+	if (!map) {
+		return code;
+	}
+	try {
+		const retained = retainLines(code, map);
+		// (whitespace aside: Bun keeps the line breaks of what it is given, as in an object over several lines)
+		const transpiler = new Bun.Transpiler({ loader, minifyWhitespace: true });
+		return transpiler.transformSync(retained) === transpiler.transformSync(code) ? retained : code;
+	} catch {
+		// (code Bun cannot read: as it was compiled, for Bun to say what is wrong in it)
+		return code;
+	}
+}
 
 /** Files that may be the renderer of this package; `isRendererFile` tells which is. */
 const RENDERER_FILE = /[\\/]renderer\.[cm]?[jt]s$/;
@@ -87,7 +134,8 @@ function rendererPath(): string | undefined {
 export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 	const development = options.development ?? false;
 	// (the compiler is the one the plugin loads, from where it is installed)
-	assertSolidVersion({ preset: installedPackage("babel-preset-solid") });
+	assertSolidVersion({ compiler: installedPackage("@solidjs/compiler") });
+	let compiler: Promise<SolidCompile> | null = null;
 	return {
 		name: "raven-tsx-solid",
 		setup(build) {
@@ -97,7 +145,8 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 			const checkedFolders = new Set<string>();
 			const assertSolidFrom = (folder: string): void => {
 				if (!checkedFolders.has(folder)) {
-					assertSolidVersion({ solid: installedPackage("solid-js", (name) => Bun.resolveSync(name, folder), folder) });
+					const from = (name: string): string => Bun.resolveSync(name, folder);
+					assertSolidVersion({ solid: installedPackage("solid-js", from, folder), universal: installedPackage("@solidjs/universal", from, folder) });
 					checkedFolders.add(folder);
 				}
 			};
@@ -124,22 +173,21 @@ export function solidPlugin(options: SolidPluginOptions = {}): BunPlugin {
 					});
 				}
 			}
-			// (Bun runs no onResolve of a plugin for a package: the server's file is read as the client's)
-			build.onLoad({ filter: /[\\/]solid-js[\\/].*server\.c?js$/ }, ({ path }) => {
+			// (Bun runs no onResolve of a plugin for a package: the file Bun takes forwards to the client's,
+			// which keeps its own path, for the relative imports in it, and is one module with it)
+			build.onLoad({ filter: development ? SOLID_FILES : SERVER_FILES }, ({ path }) => {
 				const client = clientFilesOf(solidRoot(path), development).get(path);
-				return { contents: readFileSync(client ?? path, "utf8"), loader: "js" };
+				return { contents: client ? `export * from ${JSON.stringify(client)};\n` : readFileSync(path, "utf8"), loader: "js" };
 			});
 			build.onLoad({ filter: options.filter ?? SOURCES }, async ({ path }) => {
-				// (before the source runs and imports Solid: a Solid 2 would fail there without saying why)
+				// (before the source runs and imports Solid: a Solid 1 would fail there without saying why)
 				assertSolidFrom(dirname(path));
-				// (loaded here, so that an application of React never needs Babel)
-				const [{ transformAsync }, { default: solid }] = await Promise.all([import("@babel/core"), import("babel-preset-solid")]);
-				// (the types stay, for Bun to take away: Babel only compiles the JSX)
-				const result = await transformAsync(await Bun.file(path).text(), solidBabelOptions(path, solid));
-				if (typeof result?.code !== "string") {
-					throw new Error(`raven-tsx: Babel compiled nothing from ${path}`);
-				}
-				return { contents: result.code, loader: isTypeScript(path) ? "ts" : "js" };
+				// (loaded here, so that an application of React never needs it)
+				compiler ??= solidCompiler();
+				// (the types stay, for Bun to take away: the compiler only compiles the JSX)
+				const compile = await compiler;
+				const loader = isTypeScript(path) ? "ts" : "js";
+				return { contents: onSourceLines(compile(await Bun.file(path).text(), path), loader), loader };
 			});
 		},
 	};

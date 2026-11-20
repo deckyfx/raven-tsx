@@ -1,4 +1,4 @@
-/** The Solid that an application has: the package is written for Solid 1, and says so of a Solid 2. */
+/** The Solid that an application has: the package is written for Solid 2, and says so of a Solid 1 (or of another major). */
 
 import { expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
@@ -21,56 +21,74 @@ function canLink(): boolean {
 }
 
 
-test("Solid 1 is what the package is written for", () => {
-	expect(SOLID_MAJOR).toBe(1);
-	expect(solidVersionProblem({ solid: "1.9.19", preset: "1.9.19" })).toBeUndefined();
-	expect(solidVersionProblem({ solid: "1.9.0", preset: "1.10.0-beta.0" })).toBeUndefined();
+test("Solid 2 is what the package is written for", () => {
+	expect(SOLID_MAJOR).toBe(2);
+	expect(solidVersionProblem({ solid: "2.0.3", universal: "2.0.3", compiler: "2.0.2" })).toBeUndefined();
+	expect(solidVersionProblem({ solid: "2.0.0", universal: "2.1.0-beta.0", compiler: "2.0.0" })).toBeUndefined();
 });
 
 test("a package that is not installed is not a problem of version", () => {
 	// (its own import fails then, with a message that already says which)
 	expect(solidVersionProblem({})).toBeUndefined();
-	expect(solidVersionProblem({ solid: "1.9.19" })).toBeUndefined();
+	expect(solidVersionProblem({ solid: "2.0.3" })).toBeUndefined();
+	expect(solidVersionProblem({ universal: "2.0.3" })).toBeUndefined();
 });
 
-test("a Solid 2 is named, with what to install instead", () => {
-	const problem = solidVersionProblem({ solid: "2.0.1", preset: "1.9.19" });
-	expect(problem).toContain("solid-js 2.0.1");
-	expect(problem).not.toContain("babel-preset-solid 1.9.19");
-	expect(problem).toContain("or update the dependency that brings that copy: npm install solid-js@1 (bun add solid-js@1).");
+test("a Solid 1 is named, with what to install instead, and the version of this package written for it", () => {
+	const problem = solidVersionProblem({ solid: "1.9.19", universal: "2.0.3", compiler: "2.0.2" });
+	expect(problem).toContain("supports Solid 2, not solid-js 1.9.19.");
+	expect(problem).not.toContain("@solidjs/universal 2.0.3");
+	expect(problem).not.toContain("@solidjs/compiler 2.0.2");
+	expect(problem).toContain("or update the dependency that brings that copy: npm install solid-js@2 (bun add solid-js@2).");
 	// (only the command for what is wrong: the compiler may be in another project)
-	expect(problem).not.toContain("babel-preset-solid@1");
+	expect(problem).not.toContain("@solidjs/universal@");
+	expect(problem).not.toContain("@solidjs/compiler@");
+	// (an application staying on Solid 1 has a version of this package for it)
+	expect(problem).toEndWith(" For Solid 1, use raven-tsx 0.3.x: npm install @decky.fx/raven-tsx@0.3 (bun add @decky.fx/raven-tsx@0.3).");
 });
 
-test("the compiler of Solid 2 is named too, alone or with Solid 2, each with its command", () => {
-	const preset = solidVersionProblem({ solid: "1.9.19", preset: "2.0.0-rc.2" });
-	expect(preset).toContain("not babel-preset-solid 2.0.0-rc.2.");
-	// (Babel 7 with it: npm's latest is Babel 8, which babel-preset-solid 1 does not take)
-	expect(preset).toContain("or update the dependency that brings that copy: npm install -D babel-preset-solid@1 @babel/core@7 (bun add -d babel-preset-solid@1 @babel/core@7).");
-	expect(preset).not.toContain("solid-js@1");
-	const both = solidVersionProblem({ solid: "2.0.1", preset: "2.0.0-rc.2" });
-	expect(both).toContain("not solid-js 2.0.1 and babel-preset-solid 2.0.0-rc.2.");
-	expect(both).toContain("or update the dependency that brings that copy: npm install solid-js@1 (bun add solid-js@1); npm install -D babel-preset-solid@1 @babel/core@7");
+test("the renderer's factory and the compiler of another major are named too, alone or with Solid 1, each with its command", () => {
+	const universal = solidVersionProblem({ solid: "2.0.3", universal: "3.0.0-next.0" });
+	expect(universal).toContain("not @solidjs/universal 3.0.0-next.0.");
+	expect(universal).toContain("or update the dependency that brings that copy: npm install @solidjs/universal@2 (bun add @solidjs/universal@2).");
+	expect(universal).not.toContain("solid-js@2");
+	// (no Solid 1 found: no word of the version of this package for it)
+	expect(universal).not.toContain("raven-tsx@0.3");
+	const compiler = solidVersionProblem({ compiler: "3.0.0" });
+	// (the compiler within its minor: what it compiles to must be what the renderer exports)
+	expect(compiler).toContain("not @solidjs/compiler 3.0.0. Install Solid 2");
+	expect(compiler).toContain("or update the dependency that brings that copy: npm install -D @solidjs/compiler@~2.0.2 (bun add -d @solidjs/compiler@~2.0.2).");
+	expect(compiler).not.toContain("raven-tsx@0.3");
+	const all = solidVersionProblem({ solid: "1.9.19", universal: "1.0.0", compiler: "0.1.0" });
+	expect(all).toContain("not solid-js 1.9.19 and @solidjs/universal 1.0.0 and @solidjs/compiler 0.1.0.");
+	expect(all).toContain(
+		"or update the dependency that brings that copy: npm install solid-js@2 (bun add solid-js@2); npm install @solidjs/universal@2 (bun add @solidjs/universal@2); npm install -D @solidjs/compiler@~2.0.2 (bun add -d @solidjs/compiler@~2.0.2). For Solid 1, use raven-tsx 0.3.x",
+	);
+	// (a Solid after 2 is not one this package's earlier versions are written for)
+	expect(solidVersionProblem({ solid: "3.0.0" })).not.toContain("raven-tsx@0.3");
 });
 
 test("the installed versions are those this package finds", () => {
 	expect(installedVersion("solid-js")).toBe(manifest.devDependencies["solid-js"]);
-	expect(installedVersion("babel-preset-solid")).toBe(manifest.devDependencies["babel-preset-solid"]);
+	expect(installedVersion("@solidjs/universal")).toBe(manifest.devDependencies["@solidjs/universal"]);
+	expect(installedVersion("@solidjs/compiler")).toBe(manifest.devDependencies["@solidjs/compiler"]);
 	expect(installedVersion("no-such-package-of-raven-tsx")).toBeUndefined();
 });
 
 test("a version is found where it is asked to be resolved, as the plugin does from a source's folder", () => {
 	const from = (folder: string) => (name: string) => Bun.resolveSync(name, folder);
 	expect(installedVersion("solid-js", from(import.meta.dir))).toBe(manifest.devDependencies["solid-js"]);
+	expect(installedVersion("@solidjs/universal", from(import.meta.dir))).toBe(manifest.devDependencies["@solidjs/universal"]);
 	// (a package its resolver does not find is not installed there)
 	expect(installedVersion("solid-js", () => {
 		throw new Error("not found");
 	})).toBeUndefined();
 });
 
-test("the check throws the problem, and passes Solid 1", () => {
-	expect(() => assertSolidVersion({ solid: installedVersion("solid-js"), preset: installedVersion("babel-preset-solid") })).not.toThrow();
-	expect(() => assertSolidVersion({ solid: "2.0.1" })).toThrow("supports Solid 1, not solid-js 2.0.1.");
+test("the check throws the problem, and passes the Solid 2 installed here", () => {
+	expect(() => assertSolidVersion({ solid: installedVersion("solid-js"), universal: installedVersion("@solidjs/universal"), compiler: installedVersion("@solidjs/compiler") })).not.toThrow();
+	expect(() => assertSolidVersion({ solid: "1.9.19" })).toThrow("supports Solid 2, not solid-js 1.9.19.");
+	expect(() => assertSolidVersion({ compiler: "3.0.0" })).toThrow("supports Solid 2, not @solidjs/compiler 3.0.0.");
 });
 
 test("the application's folder is that of its entry when the runtime gives one that exists", () => {
@@ -161,15 +179,16 @@ test("an installed package is named by the folder it is resolved from, and where
 	// (with pnpm, the installed folder is in a store that several projects share: the project to change
 	// is the one it is resolved from)
 	const problem = solidVersionProblem({
-		solid: { version: "2.0.1", folder: "/work/node_modules/.pnpm/solid-js@2.0.1/node_modules/solid-js", from: "/work/apps/web/src" },
-		preset: { version: "1.9.19", folder: "/work/node_modules/babel-preset-solid", from: "/work" },
+		solid: { version: "1.9.19", folder: "/work/node_modules/.pnpm/solid-js@1.9.19/node_modules/solid-js", from: "/work/apps/web/src" },
+		universal: { version: "2.0.3", folder: "/work/node_modules/@solidjs/universal", from: "/work" },
 	});
-	expect(problem).toContain("not solid-js 2.0.1 (resolved from /work/apps/web/src, installed in /work/node_modules/.pnpm/solid-js@2.0.1/node_modules/solid-js).");
-	expect(problem).not.toContain("babel-preset-solid 1.9.19");
-	expect(problem).toContain("Install Solid 1 in the project of the folder it is resolved from, or update the dependency that brings that copy:");
+	expect(problem).toContain("not solid-js 1.9.19 (resolved from /work/apps/web/src, installed in /work/node_modules/.pnpm/solid-js@1.9.19/node_modules/solid-js).");
+	expect(problem).not.toContain("@solidjs/universal 2.0.3");
+	expect(problem).toContain("Install Solid 2 in the project of the folder it is resolved from, or update the dependency that brings that copy:");
 	const here = installedPackage("solid-js");
 	expect(here?.folder).toMatch(/[\\/]node_modules[\\/]solid-js$/);
 	expect(here?.from).toMatch(/[\\/]src[\\/]solid$/);
+	expect(installedPackage("@solidjs/universal")?.folder).toMatch(/[\\/]node_modules[\\/]@solidjs[\\/]universal$/);
 	expect(installedPackage("solid-js", (name) => Bun.resolveSync(name, import.meta.dir), import.meta.dir)?.from).toBe(import.meta.dir);
 });
 

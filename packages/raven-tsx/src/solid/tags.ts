@@ -4,10 +4,10 @@
  * element, whose props follow what the element in XML gives.
  */
 
-import { $PROXY, createComponent, createRoot, createSignal, getOwner, runWithOwner, type Component, type JSX, type Owner } from "solid-js";
+import { $PROXY, createComponent, createRoot, createSignal, flush, getOwner, runWithOwner, type Component, type Owner } from "solid-js";
 import type * as r from "../core/raven";
 import { registerTagWith, type TagAdapter, type TagContent, type TagOptions as CoreTagOptions } from "../core/tags";
-import { RavenError } from "../core/errors";
+import type { JSX } from "./jsx-runtime";
 import { SolidNode } from "./node";
 import { RavenRoot } from "./root";
 
@@ -33,15 +33,10 @@ function propsOf(content: () => TagContent, owner: Owner | null): TagProps {
 			let node = nodes.get(widget);
 			if (!node) {
 				// (not the owner of what reads `children`: `{shown() && props.children}` would delete it when hidden)
-				const made = runWithOwner(owner, () => SolidNode.adopted(widget));
-				// (Solid gives nothing back when what it ran threw to a boundary of the owner, which has none)
-				if (!made) {
-					RavenError.throw("raven-tsx: the child of a registered tag could not be adopted");
-				}
-				node = made;
+				node = runWithOwner(owner, () => SolidNode.adopted(widget));
 				nodes.set(widget, node);
 			}
-			return node as unknown as JSX.Element;
+			return node;
 		});
 	};
 	const read = (): Record<string, string | number | boolean | JSX.Element> => {
@@ -49,7 +44,8 @@ function propsOf(content: () => TagContent, owner: Owner | null): TagProps {
 		const places = Object.fromEntries(Object.entries(slots).map(([name, widgets]) => [name, adopted(widgets)]));
 		return { ...attributes, ...places, children: adopted(children) };
 	};
-	// (`$PROXY` says to Solid that the keys can change: `splitProps` then reads through, and sees a key added later)
+	// (`$PROXY` says to Solid that the keys can change: `omit`, `merge` and the renderer's `spread`
+	// then read through, and see a key added later)
 	return new Proxy({} as TagProps, {
 		get: (_, key, receiver) => (key === $PROXY ? receiver : typeof key === "string" ? read()[key] : undefined),
 		has: (_, key) => key === $PROXY || (typeof key === "string" && key in read()),
@@ -78,7 +74,11 @@ const solidAdapter: TagAdapter<Component<TagProps>> = {
 			throw error;
 		}
 		return {
-			update: (next) => setCurrent(next),
+			// (rendered before Raven goes on, as React's root renders it: Solid would at the next microtask)
+			update: (next) => {
+				setCurrent(next);
+				flush();
+			},
 			unmount: () => {
 				try {
 					root.unmount();

@@ -20,7 +20,7 @@ const menuSeparator = (props: SolidProps): SolidProps => ({ ...(props["Name"] ==
 export class SolidNode {
 	parent: SolidNode | null = null;
 	readonly children: SolidNode[] = [];
-	private readonly props: SolidProps = {};
+	private readonly props: SolidProps;
 	/**
 	 * Whether what made it in Solid is gone. Until then, a node taken out of the tree stays alive:
 	 * Solid may place it again (`<Show>` of an element kept in a variable). After, it goes when out.
@@ -31,6 +31,8 @@ export class SolidNode {
 	private isContainer = false;
 	/** A child that waits for the node it replaces to go: see `insert`. */
 	private held: { readonly child: SolidNode; readonly before: SolidNode } | null = null;
+	/** Whether it has had text in it: see `textChildren`. */
+	private hadText = false;
 	/** What waits for the node of the core: the `ref` of a `<Separator>` not placed yet. */
 	private readonly waiting: ((instance: HostNode) => void)[] = [];
 
@@ -41,7 +43,10 @@ export class SolidNode {
 		public text: string | null,
 		/** Whether Solid owns it: the top of a tree is the application's, and stays when Solid's owner goes. */
 		owned = true,
+		/** The props it is made with. */
+		props: SolidProps = {},
 	) {
+		this.props = props;
 		const owner = owned ? getOwner() : null;
 		this.ownerGone = owned && owner === null;
 		if (owner) {
@@ -49,10 +54,15 @@ export class SolidNode {
 		}
 	}
 
-	/** An element of a tag. A `<Separator>` waits for its parent: in a `<Menu>`, it is a line of the menu. */
-	static element(tag: string): SolidNode {
-		const host = tag === "Separator" ? null : tag === "Window" ? WindowInstance.create({}) : WidgetInstance.create(tag, {});
-		return new SolidNode(tag, host, null);
+	/**
+	 * An element of a tag, with the props it has as written (Solid gives them to a tag that is no
+	 * component). A `<Separator>` waits for its parent: in a `<Menu>`, it is a line of the menu.
+	 */
+	static element(tag: string, staticProps?: Readonly<SolidProps>): SolidNode {
+		const props: SolidProps = { ...staticProps };
+		// (a copy: the node changes its own as Solid sets props)
+		const host = tag === "Separator" ? null : tag === "Window" ? WindowInstance.create({ ...props }) : WidgetInstance.create(tag, { ...props });
+		return new SolidNode(tag, host, null, true, props);
 	}
 
 	static text(value: string): SolidNode {
@@ -124,8 +134,11 @@ export class SolidNode {
 	private textChildren(): { readonly children?: readonly string[] } {
 		const texts = this.children.filter((child) => child.isText);
 		if (texts.length === 0) {
-			return {};
+			// (Solid 2 makes no node of an empty text: a widget whose text all went, with nothing else in
+			// it and no Text of its own, has an empty Text, the same widget, as with an empty text in it)
+			return this.hadText && this.children.length === 0 && this.props["Text"] === undefined ? { children: [""] } : {};
 		}
+		this.hadText = true;
 		if (texts.length < this.children.length) {
 			const shown = texts.find((child) => child.text !== "");
 			if (shown) {

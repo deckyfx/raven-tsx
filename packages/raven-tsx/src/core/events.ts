@@ -45,13 +45,21 @@ type IndexAndFlagHandler = (index: number, flag: boolean) => void;
  * leave state behind for the next click to read.
  */
 class EventScope {
-	private flush: () => void = () => {};
+	/** What commits pending updates, one per framework: React and Solid may run side by side. */
+	private readonly flushes: (() => void)[] = [];
 	private wrap: (run: () => void) => void = (run) => run();
 	private ignoringDepth = 0;
 
-	/** Gives the function that commits pending updates: an adapter says how, for its framework. */
-	setFlush(flush: () => void): void {
-		this.flush = flush;
+	/** Adds a function that commits pending updates: an adapter says how, for its framework. */
+	addFlush(flush: () => void): void {
+		this.flushes.push(flush);
+	}
+
+	/** Commits what every framework has pending. */
+	private flush(): void {
+		for (const flush of this.flushes) {
+			flush();
+		}
 	}
 
 	/** Gives what surrounds the run of a native event, for a framework that wants to know of one. */

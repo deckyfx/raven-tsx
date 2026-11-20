@@ -4,8 +4,15 @@
  * an application imports `@decky.fx/raven-tsx/solid`.
  */
 
-import { createRenderer } from "solid-js/universal";
+import { createRenderer } from "@solidjs/universal";
+import { flush } from "solid-js";
+import { eventScope } from "../core/events";
 import { SolidNode } from "./node";
+
+// (Solid applies writes at the next microtask: what a handler of a native event wrote is applied
+// before the event ends, so that a controlled widget is put back to what the props say, and the
+// next event reads it, as under React. Writes from elsewhere, a timer, a frame, wait for the microtask)
+eventScope.addFlush(() => flush());
 
 export const {
 	render,
@@ -19,12 +26,15 @@ export const {
 	spread,
 	setProp,
 	mergeProps,
-	use,
+	applyRef,
+	ref,
 } = createRenderer<SolidNode>({
-	createElement: (tag) => SolidNode.element(tag),
+	// (the props a tag has as written, `<raw Name="x">`: the widget is made with them)
+	createElement: (tag, staticProps) => SolidNode.element(tag, staticProps),
 	createTextNode: (value) => SolidNode.text(value),
 	replaceText: (node, value) => node.setText(value),
 	isTextNode: (node) => node.isText,
+	// (the props are kept on the node: the value before is not needed)
 	setProperty: (node, name, value) => node.setProp(name, value),
 	insertNode: (parent, node, anchor) => parent.insert(node, anchor ?? null),
 	removeNode: (parent, node) => parent.release(node),

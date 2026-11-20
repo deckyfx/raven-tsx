@@ -1,10 +1,10 @@
-/** @jsxImportSource solid-js */
+/** @jsxImportSource @decky.fx/raven-tsx/solid */
 /** How `runApp` ends. It asks for a GPU, so here the start is sent to a Raven without a window system or a GPU. */
 
 import { afterAll, beforeAll, expect, spyOn, test, type Mock } from "bun:test";
-import { onCleanup, onMount, type JSX } from "solid-js";
+import { onCleanup, onSettled } from "solid-js";
 import * as r from "../../core/raven";
-import { Label, runApp } from "../../solid/index";
+import { Label, runApp, type JSX } from "../../solid/index";
 
 const init = r.Rinit_ex;
 let starts: Mock<typeof r.Rinit_ex>;
@@ -50,7 +50,7 @@ test("the tree is cleaned up before Raven stops when the run of runApp ends with
 	});
 	let runningAtCleanup = false;
 	function App(): JSX.Element {
-		onMount(() => mounted.resolve());
+		onSettled(() => void mounted.resolve());
 		onCleanup(() => void (runningAtCleanup = r.Ris_running() === r.R_TRUE));
 		return <Label>app</Label>;
 	}

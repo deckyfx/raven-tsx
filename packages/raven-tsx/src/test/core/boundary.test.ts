@@ -7,8 +7,8 @@ import { expect, test } from "bun:test";
 
 const CORE = `${import.meta.dir}/../../core`;
 
-/** What the core may not import: a framework, or a folder of an adapter. */
-const FORBIDDEN = /^(?:react|react-reconciler|solid-js)(?:\/|$)|^(?:\.\.\/)+(?:react|solid)(?:\/|$)|^\.\/(?:react|solid)(?:\/|$)/;
+/** What the core may not import: a framework (Solid 2's packages of @solidjs too), or a folder of an adapter. */
+const FORBIDDEN = /^(?:react|react-reconciler|solid-js|@solidjs\/[^/]+)(?:\/|$)|^(?:\.\.\/)+(?:react|solid)(?:\/|$)|^\.\/(?:react|solid)(?:\/|$)/;
 
 /** Every kind of import in a source: `from "x"`, `import "x"`, `import("x")`, `require("x")`. */
 const IMPORT = /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*)["']([^"']+)["']/g;
@@ -27,7 +27,8 @@ test("the check sees every way of importing a framework", () => {
 		'import { DefaultEventPriority } from "react-reconciler/constants.js";',
 		'import { createSignal } from "solid-js";',
 		'import "react";',
-		'const dynamic = await import("solid-js/universal");',
+		'const dynamic = await import("@solidjs/universal");',
+		'import { transform } from "@solidjs/compiler";',
 		'const required = require("react");',
 		'import { WidgetInstance } from "../react/root";',
 	]) {
@@ -67,7 +68,7 @@ test("only the backend of Bun imports bun:ffi to run: the rest runs on Node.js t
 });
 
 test("importing the core loads no framework", () => {
-	const script = `await import(${JSON.stringify(`${CORE}/index.ts`)}); const loaded = Object.keys(require.cache); console.log(loaded.some((path) => /core[\\\\/]index\\.ts$/.test(path))); console.log(loaded.filter((path) => /node_modules[\\\\/](react|react-reconciler|solid-js)[\\\\/]/.test(path)).join(","));`;
+	const script = `await import(${JSON.stringify(`${CORE}/index.ts`)}); const loaded = Object.keys(require.cache); console.log(loaded.some((path) => /core[\\\\/]index\\.ts$/.test(path))); console.log(loaded.filter((path) => /node_modules[\\\\/](react|react-reconciler|solid-js|@solidjs[\\\\/][^\\\\/]+)[\\\\/]/.test(path)).join(","));`;
 	const run = Bun.spawnSync(["bun", "-e", script], { stdout: "pipe", stderr: "pipe" });
 	expect(run.stderr.toString()).toBe("");
 	expect(run.success).toBe(true);

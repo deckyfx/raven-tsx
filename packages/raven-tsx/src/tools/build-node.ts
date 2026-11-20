@@ -27,7 +27,7 @@ export const NODE_ENTRIES: Readonly<Record<string, string>> = {
 };
 
 /** What the bundle imports instead of holding. */
-const EXTERNAL = ["react", "react-reconciler", "react-reconciler/*", "solid-js", "solid-js/*", "@decky.fx/*", "@babel/core", "babel-preset-solid"];
+const EXTERNAL = ["react", "react-reconciler", "react-reconciler/*", "solid-js", "solid-js/*", "@solidjs/*", "@decky.fx/*"];
 
 /**
  * The types of bun:ffi that the declarations name, for a project without those of Bun: an

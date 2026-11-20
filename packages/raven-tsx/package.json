@@ -1,6 +1,6 @@
 {
   "name": "@decky.fx/raven-tsx",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Raven's native widgets from TSX, for Bun: a core that knows only Raven and adapters for React and Solid, with typed components made from Raven's schema",
   "license": "Apache-2.0",
   "type": "module",
@@ -41,6 +41,14 @@
       },
       "types": "./src/solid/renderer.ts",
       "default": "./src/solid/renderer.ts"
+    },
+    "./solid/jsx-runtime": {
+      "bun": "./src/solid/jsx-runtime.ts",
+      "node": {
+        "types": "./dist/types/solid/jsx-runtime.d.ts"
+      },
+      "types": "./src/solid/jsx-runtime.ts",
+      "default": "./src/solid/jsx-runtime.ts"
     },
     "./solid/register": {
       "node": {
@@ -110,22 +118,21 @@
     "build:node": "bun run src/tools/build-node.ts"
   },
   "dependencies": {
-    "@types/babel__core": "^7.20",
     "@types/react": "^19",
     "@types/react-reconciler": "^0.34"
   },
   "peerDependencies": {
-    "@babel/core": "^7.20",
-    "babel-preset-solid": "^1.9",
+    "@solidjs/compiler": "~2.0.2",
+    "@solidjs/universal": "^2.0.3",
     "react": "^19.3.0",
     "react-reconciler": "^0.34.0",
-    "solid-js": "^1.9"
+    "solid-js": "^2.0.3"
   },
   "peerDependenciesMeta": {
-    "@babel/core": {
+    "@solidjs/compiler": {
       "optional": true
     },
-    "babel-preset-solid": {
+    "@solidjs/universal": {
       "optional": true
     },
     "react": {
@@ -139,12 +146,12 @@
     }
   },
   "devDependencies": {
-    "@babel/core": "7.29.13",
+    "@solidjs/compiler": "2.0.2",
+    "@solidjs/universal": "2.0.3",
     "@types/bun": "latest",
-    "babel-preset-solid": "1.9.19",
     "react": "^19.3.0",
     "react-reconciler": "^0.34.0",
-    "solid-js": "1.9.19",
+    "solid-js": "2.0.3",
     "typescript": "^6"
   }
 }

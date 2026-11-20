@@ -1,15 +1,15 @@
-/** @jsxImportSource solid-js */
+/** @jsxImportSource @decky.fx/raven-tsx/solid */
 /** Solid on real Raven widgets, without a window system or a GPU, clicked and typed into for real. */
 
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { createRoot, createSignal, ErrorBoundary, For, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { createRoot, createSignal, Errored, flush, For, onCleanup, onSettled, Show } from "solid-js";
 import * as r from "../../core/raven";
 import { eventStats } from "../../core/events";
 import { resolveProps, type RavenProps } from "../../core/props";
 import { SolidNode } from "../../solid/node";
 import {
 	Border, Button, Checkbox, createAction, createFrame, createShortcut, createWindow, HBox, Island, Label, Menu, MenuBar, MenuItem, Portal, RavenRoot, Separator, TextInput, VBox, Window,
-	type WidgetInstance, type WindowInstance,
+	type JSX, type WidgetInstance, type WindowInstance,
 } from "../../solid/index";
 
 const WINDOW = { Title: "Test", Width: 480, Height: 480 } as const;
@@ -155,9 +155,11 @@ test("a branch that goes takes its widgets and their handlers with it", async ()
 	const inside = find("inside");
 	const handlers = eventStats().handlers;
 	setShown(false);
+	flush();
 	expect(r.Rwidget_is_valid(inside)).toBe(0);
 	expect(eventStats().handlers).toBe(handlers - 1);
 	setShown(true);
+	flush();
 	expect(find("inside")).not.toBe(r.R_INVALID_ID);
 });
 
@@ -175,9 +177,11 @@ test("an element kept in a variable keeps its widget when it is shown again", as
 	await mount(() => <Kept />);
 	const widget = find("kept");
 	setShown(false);
+	flush();
 	expect(find("kept")).toBe(r.R_INVALID_ID);
 	expect(r.Rwidget_is_valid(widget)).toBe(1);
 	setShown(true);
+	flush();
 	expect(find("kept")).toBe(widget);
 	click("kept");
 	expect(clicks).toBe(1);
@@ -300,6 +304,7 @@ test("a prop that goes away remakes the widget, in its place, with its children 
 	const panel = find("panel");
 	const inner = find("inner");
 	setFaded(false);
+	flush();
 	expect(find("panel")).not.toBe(panel);
 	expect(r.Rwidget_is_valid(panel)).toBe(0);
 	expect(find("inner")).toBe(inner);
@@ -324,28 +329,29 @@ test("a ref gives the widget, and stays right when the widget is made again", as
 	expect(r.Rwidget_is_focused(find("input"))).toBe(1);
 	const before = panel?.widget;
 	setFaded(false);
+	flush();
 	expect(panel?.widget).not.toBe(before);
 	expect(panel?.widget).toBe(find("panel"));
 });
 
-test("onMount and onCleanup run, the cleanups when the tree goes", async () => {
+test("onSettled and its cleanup run, the cleanup when the tree goes", async () => {
 	const log: string[] = [];
 	function Timer(): JSX.Element {
 		const [ticks, setTicks] = createSignal(0);
-		onMount(() => {
+		onSettled(() => {
 			log.push(`mount ${r.Rwidget_is_valid(find("ticks"))}`);
 			const timer = setInterval(() => setTicks((value) => value + 1), 2);
-			onCleanup(() => {
+			return () => {
 				clearInterval(timer);
 				log.push("cleanup");
-			});
+			};
 		});
 		return <Label Name="ticks">{ticks()}</Label>;
 	}
 	await mount(() => <VBox><Timer /></VBox>);
 	await settle(40);
 	expect(Number(text("ticks"))).toBeGreaterThan(0);
-	// (by onMount, the widgets are in their window)
+	// (by onSettled, the widgets are in their window)
 	expect(log).toEqual(["mount 1"]);
 	root?.unmount();
 	root = null;
@@ -389,20 +395,21 @@ test("an exception in a handler does not cross C", async () => {
 	expect(after).toBe(1);
 });
 
-test("text beside widgets goes to the nearest ErrorBoundary", async () => {
+test("text beside widgets goes to the nearest Errored", async () => {
 	const [loud, setLoud] = createSignal(false);
 	await mount(() => (
 		<VBox Name="box">
-			<ErrorBoundary fallback={(error: Error) => <Label Name="error">{error.message}</Label>}>
+			<Errored fallback={(error) => <Label Name="error">{(error() as Error).message}</Label>}>
 				<HBox>
 					<Label>fine</Label>
 					{loud() ? "shouting" : ""}
 				</HBox>
-			</ErrorBoundary>
+			</Errored>
 		</VBox>
 	));
 	expect(find("error")).toBe(r.R_INVALID_ID);
 	setLoud(true);
+	flush();
 	expect(text("error")).toContain('text must be alone in a widget: "shouting"');
 });
 
@@ -432,6 +439,7 @@ test("windows come and go with their elements, and follow their props", async ()
 	expect(r.Rlabel_get_text(r.Rwidget_find(b, "in-second"))).toBe("two");
 
 	setTitle("Renamed");
+	flush();
 	expect(first?.window).toBe(a);
 	expect(r.Rwindow_get_title(a)).toBe("Renamed");
 
@@ -440,6 +448,7 @@ test("windows come and go with their elements, and follow their props", async ()
 	expect(closing).toBe(1);
 	expect(r.Rwindow_is_valid(b)).toBe(1);
 	setBoth(false);
+	flush();
 	expect(r.Rwindow_is_valid(b)).toBe(0);
 	expect(r.Rwindow_is_valid(a)).toBe(1);
 
@@ -447,6 +456,7 @@ test("windows come and go with their elements, and follow their props", async ()
 	r.Rwindow_close(a);
 	expect(first?.isOpen).toBe(false);
 	setTitle("Again");
+	flush();
 	windows.unmount();
 	expect(eventStats().handlers).toBe(0);
 });
@@ -476,6 +486,7 @@ test("a Separator in a Menu is a line of the menu, and elsewhere a widget", asyn
 	expect(r.Rwidget_get_type(line)).toBe(r.R_WIDGET_MENU_ITEM);
 	expect(r.Rwidget_get_type(find("plain"))).toBe(r.R_WIDGET_SEPARATOR);
 	setName("renamed");
+	flush();
 	expect(find("renamed")).toBe(line);
 });
 
@@ -498,6 +509,7 @@ test("a Portal renders into a widget made by hand, and takes its children back w
 	click("ported");
 	expect(clicks).toBe(1);
 	setShown(false);
+	flush();
 	expect(namesUnder("by-hand")).toEqual([]);
 	expect(r.Rwidget_is_valid(box)).toBe(1);
 });
@@ -532,9 +544,11 @@ test("shortcuts fire on their window, and go away with their component", async (
 	press();
 	expect(fired).toBe(1);
 	setCount(10);
+	flush();
 	press();
 	expect(fired).toBe(11);
 	setShown(false);
+	flush();
 	press();
 	expect(fired).toBe(11);
 	windows.unmount();
@@ -569,27 +583,29 @@ test("createFrame runs at each frame while its component lives", async () => {
 	await settle(30);
 	expect(frames).toBeGreaterThan(0);
 	setShown(false);
+	flush();
 	const stopped = frames;
 	await settle(30);
 	expect(frames).toBe(stopped);
 });
 
-test("a widget after text goes to the nearest ErrorBoundary too, the text being first", async () => {
+test("a widget after text goes to the nearest Errored too, the text being first", async () => {
 	const [more, setMore] = createSignal(false);
 	await mount(() => (
 		<VBox Name="box">
-			<ErrorBoundary fallback={(error: Error) => <Label Name="error">{error.message}</Label>}>
+			<Errored fallback={(error) => <Label Name="error">{(error() as Error).message}</Label>}>
 				<HBox>
 					{"words"}
 					<Show when={more()}>
 						<Label>a widget</Label>
 					</Show>
 				</HBox>
-			</ErrorBoundary>
+			</Errored>
 		</VBox>
 	));
 	expect(find("error")).toBe(r.R_INVALID_ID);
 	setMore(true);
+	flush();
 	expect(text("error")).toContain('text must be alone in a widget: "words"');
 });
 
@@ -643,10 +659,12 @@ test("a window that moves to another parent stays open, the same window", async 
 	const opened = kept?.window;
 	expect(kept?.isOpen).toBe(true);
 	setWhere("b");
+	flush();
 	expect(kept?.isOpen).toBe(true);
 	expect(kept?.window).toBe(opened);
 	// (back: b lets it go first, which closes it, as a window shown no more; a then opens it again)
 	setWhere("a");
+	flush();
 	expect(kept?.isOpen).toBe(true);
 	expect(r.Rwidget_find(kept?.window ?? r.R_INVALID_ID, "in-kept")).not.toBe(r.R_INVALID_ID);
 });
@@ -705,7 +723,7 @@ test("a Portal whose children fail takes away those it placed", async () => {
 	const made = createWindow(WINDOW);
 	window = made.window;
 	root = made.root;
-	// (no ErrorBoundary: the failure leaves the render, which deletes the tree)
+	// (no Errored: the failure leaves the render, which deletes the tree)
 	expect(() =>
 		made.root.render(() => (
 			<Portal widget={box}>
@@ -732,12 +750,15 @@ test("the Text of a widget comes back when the text in it goes", async () => {
 	));
 	expect(text("fallback")).toBe("fallback");
 	setShown(true);
+	flush();
 	expect(text("fallback")).toBe("shown!");
 	setShown(false);
+	flush();
 	expect(text("fallback")).toBe("fallback");
 	// (with no Text of its own, an empty text is its Text: the same widget, with nothing in it)
 	const plain = find("plain");
 	setValue("");
+	flush();
 	expect(text("plain")).toBe("");
 	expect(find("plain")).toBe(plain);
 });
@@ -871,9 +892,12 @@ test("a window added in a tree that is not shown opens only once the tree is sho
 	}
 	await mount(() => <Kept />);
 	setShown(false);
+	flush();
 	setLate(true);
+	flush();
 	expect(added?.isOpen).toBe(false);
 	setShown(true);
+	flush();
 	expect(added?.isOpen).toBe(true);
 });
 
@@ -970,18 +994,37 @@ test("an empty text beside a widget that goes is the Text again", async () => {
 			update(props);
 		};
 	};
+	// (a node with an empty text in it: alone, the empty text is the Text; beside a widget, the prop is)
+	const button = SolidNode.element("Button");
+	button.setProp("Text", "prop");
+	button.withInstance((instance) => watch(instance as WidgetInstance));
+	button.insert(SolidNode.text(""), null);
+	const first = SolidNode.element("Label");
+	button.insert(first, null);
+	button.release(first);
+	expect(given.at(-1)).toBe("");
+	button.insert(SolidNode.element("Label"), null);
+	expect(given.at(-1)).toBe("prop");
+	button.clear();
+	// (Solid 2 makes no node of an empty text written in code: the widget that goes leaves the prop)
+	given.length = 0;
+	const [tip, setTip] = createSignal("one");
 	await mount(() => (
-		<Button Name="b" Text="prop" ref={watch}>
+		<Button Name="b" Text="prop" Tooltip={tip()} ref={watch}>
 			{""}
 			{shown() && <Label Name="inner" />}
 		</Button>
 	));
 	setShown(false);
-	// (alone, the empty text is the Text the code wrote)
-	expect(given.at(-1)).toBe("");
-	setShown(true);
-	// (beside a widget, it is no Text: the prop is)
+	flush();
+	// (a prop that changes has the node give its props again, the Text with them)
+	setTip("two");
+	flush();
 	expect(given.at(-1)).toBe("prop");
+	setShown(true);
+	flush();
+	expect(given.at(-1)).toBe("prop");
+	expect(given).not.toContain("");
 });
 
 test("the ref of a widget comes once Raven has it, placed, as React's does", async () => {
@@ -1010,10 +1053,13 @@ test("a widget can take the place of the text in a widget, and the text its plac
 	await mount(() => <Button Name="b">{busy() ? <Label Name="spinning">...</Label> : "Save"}</Button>);
 	expect(placed()).toEqual([]);
 	setBusy(true);
+	flush();
 	expect(placed()).toEqual(["spinning"]);
 	setBusy(false);
+	flush();
 	expect(placed()).toEqual([]);
 	setBusy(true);
+	flush();
 	expect(placed()).toEqual(["spinning"]);
 });
 
@@ -1069,15 +1115,16 @@ test("the ref of a widget runs under the owner of its element: what it makes goe
 	));
 	expect(ticks).toBeGreaterThan(0);
 	setShown(false);
+	flush();
 	const before = ticks;
 	await settle();
 	expect(ticks).toBe(before);
 });
 
-test("a ref of a widget that throws reaches the ErrorBoundary around it", async () => {
+test("a ref of a widget that throws reaches the Errored around it", async () => {
 	await mount(() => (
 		<VBox>
-			<ErrorBoundary fallback={(error: Error) => <Label Name="caught">{error.message}</Label>}>
+			<Errored fallback={(error) => <Label Name="caught">{(error() as Error).message}</Label>}>
 				<Label
 					ref={() => {
 						throw new Error("from a ref");
@@ -1085,7 +1132,7 @@ test("a ref of a widget that throws reaches the ErrorBoundary around it", async 
 				>
 					inside
 				</Label>
-			</ErrorBoundary>
+			</Errored>
 		</VBox>
 	));
 	expect(text("caught")).toBe("from a ref");
@@ -1125,9 +1172,11 @@ test("an element kept in a variable, shown in a Portal, keeps its widget when th
 	r.Rwidget_add_child(find("outer"), box);
 	const widget = find("kept");
 	setShown(false);
+	flush();
 	expect(namesUnder("by-hand")).toEqual([]);
 	expect(r.Rwidget_is_valid(widget)).toBe(1);
 	setShown(true);
+	flush();
 	expect(find("kept")).toBe(widget);
 });
 
@@ -1149,9 +1198,11 @@ test("an island kept in a variable leaves its window alive, and comes back", asy
 	const island = r.Rwindow_get_island(id);
 	expect(island).not.toBe(r.R_INVALID_ID);
 	setShown(false);
+	flush();
 	expect(r.Rwindow_get_island(id)).toBe(r.R_INVALID_ID);
 	expect(r.Rwidget_is_valid(island)).toBe(1);
 	setShown(true);
+	flush();
 	expect(r.Rwindow_get_island(id)).toBe(island);
 	windows.unmount();
 	expect(r.Rwidget_is_valid(island)).toBe(0);
@@ -1188,9 +1239,11 @@ test("a child kept by an outer owner leaves alive when the widget that held it g
 	const widget = find("kept");
 	const inner = find("inner");
 	setShown(false);
+	flush();
 	expect(r.Rwidget_is_valid(inner)).toBe(0);
 	expect(r.Rwidget_is_valid(widget)).toBe(1);
 	setShown(true);
+	flush();
 	expect(find("kept")).toBe(widget);
 	expect(r.Rwidget_get_parent(widget)).toBe(find("inner"));
 });
@@ -1214,6 +1267,7 @@ test("a shortcut waits for its window to open: one made before it is shown", asy
 	await settle();
 	expect(owner?.isOpen).toBe(false);
 	setOpen(true);
+	flush();
 	await settle();
 	const id = owner?.window ?? r.R_INVALID_ID;
 	expect(r.Rwindow_is_valid(id)).toBe(1);
@@ -1270,9 +1324,11 @@ test("a window kept in a variable closes when hidden, and opens again with the s
 	const label = r.Rwidget_find(first, "inside");
 	expect(label).not.toBe(r.R_INVALID_ID);
 	setShown(false);
+	flush();
 	expect(r.Rwindow_is_valid(first)).toBe(0);
 	expect(r.Rwidget_is_valid(label)).toBe(1);
 	setShown(true);
+	flush();
 	await settle();
 	expect(owner).toBe(instance);
 	const second = owner?.window ?? r.R_INVALID_ID;
@@ -1314,8 +1370,10 @@ test("a window inside a box a condition hides closes with it, and opens again wh
 	await mount(() => <Nested />);
 	expect(inner?.isOpen).toBe(true);
 	setShown(false);
+	flush();
 	expect(inner?.isOpen).toBe(false);
 	setShown(true);
+	flush();
 	expect(inner?.isOpen).toBe(true);
 	expect(r.Rwindow_get_title(inner?.window ?? r.R_INVALID_ID)).toBe("inner");
 });
@@ -1346,13 +1404,14 @@ test("text at the top of a tree, in a root or a portal, has no widget and is ref
 	const [said, setSaid] = createSignal("");
 	await mount(() => (
 		<VBox Name="outer">
-			<ErrorBoundary fallback={(error: Error) => <Label Name="error">{error.message}</Label>}>
+			<Errored fallback={(error) => <Label Name="error">{(error() as Error).message}</Label>}>
 				<Portal widget={box}>{said()}</Portal>
-			</ErrorBoundary>
+			</Errored>
 		</VBox>
 	));
 	r.Rwidget_add_child(find("outer"), box);
 	setSaid("hello");
+	flush();
 	expect(text("error")).toContain('text must be in a widget: "hello"');
 	expect(r.Rwidget_is_valid(box)).toBe(1);
 	expect(r.Rlabel_get_text(box)).toBe("mine");

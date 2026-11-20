@@ -3,7 +3,7 @@
   "compilerOptions": {
     "types": ["bun"],
     "jsx": "preserve",
-    "jsxImportSource": "solid-js"
+    "jsxImportSource": "@decky.fx/raven-tsx/solid"
   },
   "include": ["src", "build.ts"]
 }
