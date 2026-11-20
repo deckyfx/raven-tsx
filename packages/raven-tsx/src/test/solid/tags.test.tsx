@@ -1,10 +1,10 @@
-/** @jsxImportSource solid-js */
+/** @jsxImportSource @decky.fx/raven-tsx/solid */
 /** Solid components as tags of Raven: built by Raven from XML, as `<Button>` is, with no declaration in XML. */
 
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { createSignal, onCleanup, onMount, splitProps, type JSX } from "solid-js";
+import { createSignal, flush, omit, onCleanup, onSettled } from "solid-js";
 import * as r from "../../core/raven";
-import { Border, createWindow, HBox, Label, RavenRoot, registerTag, VBox } from "../../solid/index";
+import { Border, createWindow, HBox, Label, RavenRoot, registerTag, VBox, type JSX } from "../../solid/index";
 
 let window: r.Rid = r.R_INVALID_ID;
 let root: RavenRoot | null = null;
@@ -82,7 +82,7 @@ interface BadgeProps {
 
 /** A small label, with a number and a switch to show the kinds of attributes. */
 function Badge(props: BadgeProps): JSX.Element {
-	onMount(() => mounted++);
+	onSettled(() => void mounted++);
 	onCleanup(() => mounted--);
 	const text = (): string => props.Text ?? "new";
 	return (
@@ -151,10 +151,10 @@ test("destroying the widget unmounts the component, and runs its cleanups", asyn
 	expect(errors).toEqual([]);
 });
 
-test("an attribute set later reaches the props that splitProps gave out", async () => {
+test("an attribute set later reaches the props that omit gave out", async () => {
 	function Split(props: BadgeProps): JSX.Element {
-		const [count, rest] = splitProps(props, ["Count"]);
-		return <Label Name="split">{`${rest.Text ?? "none"} ${count.Count ?? 0}`}</Label>;
+		const rest = omit(props, "Count");
+		return <Label Name="split">{`${rest.Text ?? "none"} ${props.Count ?? 0}`}</Label>;
 	}
 	unregister.push(registerTag("Split", Split, { attributes: { Text: "string", Count: "number" } }));
 	await build('<VBox><Split Name="s"/></VBox>');
@@ -175,12 +175,16 @@ test("a child of the element that the component hides and shows again comes back
 	const inner = r.Rwidget_find(fold, "inner");
 	expect(namesUnder(r.Rwidget_find(fold, "fold-body"))).toEqual(["inner"]);
 	setOpen(false);
+	flush();
 	expect(namesUnder(r.Rwidget_find(fold, "fold-body"))).toEqual([]);
 	setOpen(true);
+	flush();
 	// (the same widget: the element's child, which hiding did not delete)
 	expect(namesUnder(r.Rwidget_find(fold, "fold-body"))).toEqual(["inner"]);
 	expect(r.Rwidget_find(fold, "inner")).toBe(inner);
 	setOpen(false);
+	flush();
 	setOpen(true);
+	flush();
 	expect(r.Rwidget_find(fold, "inner")).toBe(inner);
 });

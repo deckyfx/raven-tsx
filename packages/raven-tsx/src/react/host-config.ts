@@ -125,14 +125,14 @@ const hostConfig: RavenHostConfig = {
 	bindToConsole: (_method, args) => console.log.bind(console, ...args),
 	getSuspendedCommitReason: () => null,
 	resetFormInstance: () => {},
-	rendererVersion: "0.3.1",
+	rendererVersion: "0.4.0",
 	rendererPackageName: "raven-tsx-react",
 	extraDevToolsConfig: null,
 };
 
 export const reconciler = ReactReconciler(hostConfig);
 
-eventScope.setFlush(() => {
+eventScope.addFlush(() => {
 	reconciler.flushSyncWork();
 });
 eventScope.setWrapper((run) => updatePriority.discrete(run));

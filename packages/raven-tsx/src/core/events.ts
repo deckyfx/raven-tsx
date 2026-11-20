@@ -40,18 +40,41 @@ export interface PlotView {
 type IndexAndFlagHandler = (index: number, flag: boolean) => void;
 
 /**
+ * How many times the commits of several frameworks run at the end of an event: enough for what one
+ * gives the other back and forth (8 passes, 7 hand-overs), short of a loop between them.
+ */
+export const CROSS_PASSES = 8;
+
+/**
  * Runs what a native event starts: the handler, then the commit of what it changed.
  * The commit happens before the next event, as in a browser: a discrete event must not
- * leave state behind for the next click to read.
+ * leave state behind for the next click to read. The package has one, `eventScope`.
  */
-class EventScope {
-	private flush: () => void = () => {};
+export class EventScope {
+	/** What commits pending updates, one per framework: React and Solid may run side by side. */
+	private readonly flushes: (() => void)[] = [];
 	private wrap: (run: () => void) => void = (run) => run();
 	private ignoringDepth = 0;
 
-	/** Gives the function that commits pending updates: an adapter says how, for its framework. */
-	setFlush(flush: () => void): void {
-		this.flush = flush;
+	/** Adds a function that commits pending updates: an adapter says how, for its framework. */
+	addFlush(flush: () => void): void {
+		this.flushes.push(flush);
+	}
+
+	/**
+	 * Commits what every framework has pending. Again and again when there are several, up to
+	 * `CROSS_PASSES`: the commit of one can give the other work (an effect of Solid that sets a state
+	 * of React, a layout effect of React that writes a signal), back and forth. Neither says whether
+	 * it has work left, so the passes are counted; one with nothing pending costs next to nothing. A
+	 * longer chain goes on at the microtask, as any write outside an event.
+	 */
+	private flush(): void {
+		const passes = this.flushes.length > 1 ? CROSS_PASSES : 1;
+		for (let pass = 0; pass < passes; pass++) {
+			for (const flush of this.flushes) {
+				flush();
+			}
+		}
 	}
 
 	/** Gives what surrounds the run of a native event, for a framework that wants to know of one. */
@@ -86,17 +109,21 @@ class EventScope {
 		}
 	}
 
-	/** Runs a handler of the user, and commits what it changed. */
+	/**
+	 * Runs a handler of the user, and commits what it changed, then `afterwards`: also when the handler
+	 * throws, after what it wrote before (the next event must not read it uncommitted, and a controlled
+	 * widget goes back to its props). Each step that throws is said on its own: one does not hide another.
+	 */
 	run(handler: () => void, afterwards?: () => void): void {
 		if (this.ignoringDepth > 0) {
 			return;
 		}
 		this.wrap(() => {
-			this.guard(() => {
-				handler();
-				this.flush();
-				afterwards?.();
-			});
+			this.guard(handler);
+			this.guard(() => this.flush());
+			if (afterwards) {
+				this.guard(afterwards);
+			}
 		});
 	}
 }

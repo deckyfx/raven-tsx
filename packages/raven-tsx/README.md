@@ -69,12 +69,14 @@ An application of Solid builds with `Bun.build` and the plugin, as [examples/sol
 
 ## Solid
 
-    bun add @decky.fx/raven-tsx solid-js@1
-    bun add -d babel-preset-solid@1 @babel/core@7
+    bun add @decky.fx/raven-tsx solid-js@2 @solidjs/universal@2
+    bun add -d @solidjs/compiler@~2.0.2
 
-The package is written for Solid 1 (1.9), whose compiler runs on Babel 7. npm now gives Solid 2 and Babel 8 by default, so the versions matter: Solid 2 moved its renderer and changed its compiler, and with it the preload stops and says so; npm refuses `babel-preset-solid@1` next to Babel 8. Solid 2 comes in a later version.
+The package is written for Solid 2: `solid-js`, `@solidjs/universal`, on which its renderer is made, and Solid's compiler `@solidjs/compiler`, kept within its minor version, as what it compiles to must be what the renderer exports. With Solid 1, which has its renderer elsewhere and another compiler, the preload stops and says so. An application that stays on Solid 1 stays on raven-tsx 0.3.x, which is written for it (with `babel-preset-solid`, as its README says):
 
-Solid compiles its JSX itself, with Babel, to calls of a renderer: Bun alone would compile it for React. The plugin of the package does that, and gives Solid's build for clients, as on Bun `solid-js` would otherwise be its build for servers, which does not react. Preload it, for `bun run` and `bun test`:
+    bun add @decky.fx/raven-tsx@0.3
+
+Solid compiles its JSX itself, with its own compiler, to calls of a renderer: Bun alone would compile it for React. The plugin of the package does that, and gives Solid's build for clients, as on Bun `solid-js` would otherwise be its build for servers, which does not react. Preload it, for `bun run` and `bun test`:
 
 ```toml
 # bunfig.toml
@@ -85,8 +87,10 @@ preload = ["@decky.fx/raven-tsx/solid/preload"]
 ```
 
 ```json
-{ "compilerOptions": { "jsx": "preserve", "jsxImportSource": "solid-js", "types": ["bun"] } }
+{ "compilerOptions": { "jsx": "preserve", "jsxImportSource": "@decky.fx/raven-tsx/solid", "types": ["bun"] } }
 ```
+
+The types of JSX come from the package: Solid 2 leaves them to its renderers, and those of `@solidjs/web` are the DOM's.
 
 ```tsx
 import { createSignal } from "solid-js";
@@ -97,7 +101,7 @@ function App() {
 	return (
 		<VBox Spacing={12} Slot={{ Padding: 24 }}>
 			<Label>Clicked {count()} times</Label>
-			<Button Style="Primary" OnClicked={() => setCount(count() + 1)}>Click me</Button>
+			<Button Style="Primary" OnClicked={() => setCount((value) => value + 1)}>Click me</Button>
 		</VBox>
 	);
 }
@@ -109,6 +113,9 @@ The components, their props, events, windows, themes and tags are the same as wi
 
 - `runApp`, `RavenRoot.render` and `createWindow().root.render` take a function that returns the tree, as Solid's `render` does.
 - A component runs once, and a signal changes only the widgets that read it. A handler's change is on the widgets when the handler returns, so a controlled `TextInput` or `Checkbox` works as with React.
+- As everywhere in Solid 2, a write is read once Solid flushes: at the end of the event that runs the handler, at the next microtask (a timer's), or at `flush()` from `solid-js`. In a handler, `setCount((value) => value + 1)` counts each click, where reading `count()` again after a write still gives the value before it.
+- What runs once the tree is shown, and stops with the component, goes in `onSettled`, which returns its cleanup (Solid 1's `onMount`). An error in the tree reaches the nearest `<Errored>` (Solid 1's `<ErrorBoundary>`). One that no `<Errored>` catches in an update (after a click, a timer) is uncaught: Solid stops in every tree and gives it to `reportError`, which ends the program on Bun and Node.js as any uncaught exception does. An application puts an `<Errored>` around what may throw. A render that throws is different: its tree goes, the error goes to the caller of `render` (or `runApp`), and Solid works again for the next.
+- An empty text is no text: `{""}`, or an expression that gives `""`, makes nothing, where Solid 1 made an empty text. When all the text of a widget goes and no `Text` prop gives it one, its `Text` becomes `""`.
 - `ref` receives the `WidgetInstance` once Raven has the widget, placed, as React's does: `ref={(input) => input.focus()}` works. An element never placed gives no ref. The `WindowInstance` of a `<Window>` comes when the element is made; the window opens once it is placed.
 - `createAction(name, handler)`, `createShortcut(() => window, keys, handler)` and `createFrame(handler)` are the hooks of React, and last as long as the component that calls them.
 - `<Portal widget={handle}>` renders into a widget made by hand, as `createPortal` does with React.
@@ -137,8 +144,8 @@ TSX works through any compiler that turns it into JavaScript for Node.js, as wit
 
 Solid compiles its TSX itself: the register of the package does it under Node.js (24 or newer), as the preload does on Bun, and gives Solid's build for clients. The TypeScript of an application is then taken away by Node.js, so it must be erasable, as Node.js runs TypeScript:
 
-    npm install @decky.fx/raven-tsx solid-js@1
-    npm install -D babel-preset-solid@1 @babel/core@7
+    npm install @decky.fx/raven-tsx solid-js@2 @solidjs/universal@2
+    npm install -D @solidjs/compiler@~2.0.2
     node --import @decky.fx/raven-tsx/solid/register src/index.tsx
 
 The files are those of [Solid](#solid) on Bun, unchanged.

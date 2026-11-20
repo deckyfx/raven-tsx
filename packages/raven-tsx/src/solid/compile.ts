@@ -1,18 +1,16 @@
-/// <reference path="./babel-preset-solid.d.ts" />
 /**
  * How Solid's TSX is compiled for this package, on Bun (`./plugin`) and on Node.js (`./register`):
- * Babel with `babel-preset-solid`, in its universal mode, for the renderer of
+ * Solid's own compiler (`@solidjs/compiler`), in its universal mode, for the renderer of
  * `@decky.fx/raven-tsx/solid/renderer`. Only the JSX is compiled: the types stay, for the runtime
  * to take away.
  */
 
-import type { PluginItem, TransformOptions } from "@babel/core";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** The major version of Solid this package is written for: its renderer, its compiler. */
-export const SOLID_MAJOR = 1;
+export const SOLID_MAJOR = 2;
 
 /**
  * A package as it is installed: its version, the folder that holds it, and the folder it was
@@ -27,34 +25,45 @@ export interface InstalledPackage {
 
 /**
  * The versions of Solid's packages that an application has (a version, or the installed package,
- * whose folder the message then names), each missing when it is not there.
+ * whose folder the message then names), each missing when it is not there: `solid-js`, the
+ * renderer's factory `@solidjs/universal`, and the compiler `@solidjs/compiler`.
  */
 export interface SolidVersions {
 	readonly solid?: string | InstalledPackage | undefined;
-	readonly preset?: string | InstalledPackage | undefined;
+	readonly universal?: string | InstalledPackage | undefined;
+	readonly compiler?: string | InstalledPackage | undefined;
 }
 
 /** The version of a package as `SolidVersions` holds it. */
 const versionOf = (found: string | InstalledPackage): string => (typeof found === "string" ? found : found.version);
 
 /**
- * What is wrong with these versions of Solid, or nothing. Solid 2 moved its renderer
- * (`solid-js/universal`) and changed its compiler: with it, an application fails at its first import
- * with "Cannot find module", which does not say why.
+ * What is wrong with these versions of Solid, or nothing. Solid 1 has its renderer elsewhere
+ * (`solid-js/universal`) and another compiler (Babel's): with it, an application fails at its
+ * first import with "Cannot find module", which does not say why.
  */
 export function solidVersionProblem(versions: SolidVersions): string | undefined {
 	// (each with the folder it is in, when known: in a workspace, the project to change is the one
-	// that installs it; and only the command for what is wrong, as the compiler may be in another)
+	// that installs it; and only the command for what is wrong, as the compiler may be in another.
+	// The compiler within its minor: what it compiles to must be what the renderer exports)
 	const install = {
 		"solid-js": `npm install solid-js@${SOLID_MAJOR} (bun add solid-js@${SOLID_MAJOR})`,
-		"babel-preset-solid": `npm install -D babel-preset-solid@${SOLID_MAJOR} @babel/core@7 (bun add -d babel-preset-solid@${SOLID_MAJOR} @babel/core@7)`,
+		"@solidjs/universal": `npm install @solidjs/universal@${SOLID_MAJOR} (bun add @solidjs/universal@${SOLID_MAJOR})`,
+		"@solidjs/compiler": `npm install -D @solidjs/compiler@~${SOLID_MAJOR}.0.2 (bun add -d @solidjs/compiler@~${SOLID_MAJOR}.0.2)`,
 	} as const;
 	const found: string[] = [];
 	const commands: string[] = [];
-	for (const [name, installed] of [["solid-js", versions.solid], ["babel-preset-solid", versions.preset]] as const) {
-		if (installed !== undefined && Number.parseInt(versionOf(installed), 10) !== SOLID_MAJOR) {
+	let solid1 = false;
+	const packages = [["solid-js", versions.solid], ["@solidjs/universal", versions.universal], ["@solidjs/compiler", versions.compiler]] as const;
+	for (const [name, installed] of packages) {
+		if (installed === undefined) {
+			continue;
+		}
+		const major = Number.parseInt(versionOf(installed), 10);
+		if (major !== SOLID_MAJOR) {
 			found.push(`${name} ${versionOf(installed)}${typeof installed === "string" ? "" : ` (resolved from ${installed.from}, installed in ${installed.folder})`}`);
 			commands.push(install[name]);
+			solid1 ||= major === 1;
 		}
 	}
 	if (found.length === 0) {
@@ -62,8 +71,9 @@ export function solidVersionProblem(versions: SolidVersions): string | undefined
 	}
 	return (
 		`raven-tsx: @decky.fx/raven-tsx/solid supports Solid ${SOLID_MAJOR}, not ${found.join(" and ")}. ` +
-		`Install Solid ${SOLID_MAJOR} in the project of the folder it is resolved from, or update the dependency that brings that copy: ${commands.join("; ")}. ` +
-		`Solid 2 comes in a later version of raven-tsx.`
+		`Install Solid ${SOLID_MAJOR} in the project of the folder it is resolved from, or update the dependency that brings that copy: ${commands.join("; ")}.` +
+		// (an application staying on Solid 1 has the version of this package that is written for it)
+		(solid1 ? " For Solid 1, use raven-tsx 0.3.x: npm install @decky.fx/raven-tsx@0.3 (bun add @decky.fx/raven-tsx@0.3)." : "")
 	);
 }
 
@@ -123,7 +133,7 @@ export function installedVersion(name: string, resolveEntry?: (name: string) => 
 	return installedPackage(name, resolveEntry)?.version;
 }
 
-/** What compiled TSX imports: the renderer of this package (see `solidBabelOptions`). */
+/** What compiled TSX imports: the renderer of this package (see `solidCompiler`). */
 export const RENDERER = "@decky.fx/raven-tsx/solid/renderer";
 
 /**
@@ -232,18 +242,33 @@ export function assertSolidVersion(versions: SolidVersions): void {
 /** The files compiled by default: `.tsx` and `.jsx`, but those of node_modules, which come compiled. */
 export const SOURCES = /^(?!.*[\\/]node_modules[\\/]).*\.[jt]sx$/;
 
-/** Whether a file is TypeScript, whose types the runtime takes away after Babel. */
+/** Whether a file is TypeScript, whose types the runtime takes away after Solid's compiler. */
 export const isTypeScript = (path: string): boolean => /\.tsx$/.test(path);
 
-/** The options of Babel for a file, with the preset of Solid as the runtime loaded it. */
-export function solidBabelOptions(path: string, solid: PluginItem): TransformOptions {
-	return {
-		filename: path,
-		babelrc: false,
-		configFile: false,
-		// (an error says the line of the source: the runtimes do not read Babel's source maps)
-		retainLines: true,
-		parserOpts: { plugins: isTypeScript(path) ? ["jsx", "typescript"] : ["jsx"] },
-		presets: [[solid, { generate: "universal", moduleName: RENDERER }]],
+/** What Solid's compiler gives for a source: the code, TSX staying TypeScript, and its source map. */
+export interface SolidOutput {
+	readonly code: string;
+	/** The source map (version 3, JSON), when the compiler gave one. */
+	readonly map: string | null;
+}
+
+/** Compiles the JSX of a source for Solid, given its path. */
+export type SolidCompile = (source: string, path: string) => SolidOutput;
+
+/**
+ * Loads Solid's compiler, and returns what compiles a source with it: its JSX becomes calls of this
+ * package's renderer, its types stay.
+ */
+export async function solidCompiler(): Promise<SolidCompile> {
+	// (loaded once the versions are checked, and only then: an application of React never needs it)
+	const { transform } = await import("@solidjs/compiler");
+	return (source, path) => {
+		const { code, map } = transform(source, { filename: path, generate: "universal", moduleName: RENDERER, sourceMap: true });
+		return { code, map: map ?? null };
 	};
+}
+
+/** The code with its source map inline at the end, which Node.js reads (`--enable-source-maps`): an error says the line of the source. */
+export function withInlineMap({ code, map }: SolidOutput): string {
+	return map ? `${code}\n//# sourceMappingURL=data:application/json;base64,${Buffer.from(map).toString("base64")}\n` : code;
 }

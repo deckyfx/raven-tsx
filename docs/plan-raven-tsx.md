@@ -74,6 +74,8 @@ Still to do: `WebView` (Raven's Node.js binding has no `raven_web.h`).
 - The core takes props and children on a node not yet placed (`update` and `append` on a pending node), and gives a child back alive (`release`). An island cannot leave its window alive: Raven deletes the island it replaces.
 - 32 tests in `test/solid/`, `examples/solid-helloworld` (the React `helloworld`'s basics, one executable), and `check:consumer` builds and runs a Solid application from the packed tarballs.
 
+**Then, for 0.4.0: Solid 2.** The Babel of 4a is gone: the plugin and the register compile with Solid's own compiler, `@solidjs/compiler` (native, Oxc), in its universal mode, and the renderer is made on `@solidjs/universal`, where Solid 2 moved `solid-js/universal`. Bun still reads no source map of a plugin, so `solid/lines.ts` puts each compiled line back on its source line, as `retainLines` did. Solid 2 leaves the types of JSX to its renderers: an application sets `"jsxImportSource": "@decky.fx/raven-tsx/solid"`. Its writes are read once Solid flushes, so the core's event scope flushes Solid at the end of each event, before the put-back of a controlled widget. The preload and the register refuse Solid 1 and name raven-tsx 0.3.x, which stays the version for it. What 4a and 4b say below is the plan of 0.1.1, for Solid 1.
+
 ### 4a. Test the compiler first (half a day, decides whether to go on)
 
 Solid's TSX is not React's. Babel compiles it with `babel-preset-solid`, set to `generate: "universal"` and to a `moduleName` naming our renderer. Bun's own JSX cannot do that. Check that a Bun plugin can:
