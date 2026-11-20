@@ -40,6 +40,12 @@ export interface PlotView {
 type IndexAndFlagHandler = (index: number, flag: boolean) => void;
 
 /**
+ * How many times the commits of several frameworks run at the end of an event: enough for what one
+ * gives the other back and forth (8 passes, 7 hand-overs), short of a loop between them.
+ */
+export const CROSS_PASSES = 8;
+
+/**
  * Runs what a native event starts: the handler, then the commit of what it changed.
  * The commit happens before the next event, as in a browser: a discrete event must not
  * leave state behind for the next click to read. The package has one, `eventScope`.
@@ -56,12 +62,14 @@ export class EventScope {
 	}
 
 	/**
-	 * Commits what every framework has pending. Twice when there are several: the commit of one can
-	 * give the other work (an effect of Solid that sets a state of React, a layout effect of React
-	 * that writes a signal), whichever came first; a commit with nothing pending does nothing.
+	 * Commits what every framework has pending. Again and again when there are several, up to
+	 * `CROSS_PASSES`: the commit of one can give the other work (an effect of Solid that sets a state
+	 * of React, a layout effect of React that writes a signal), back and forth. Neither says whether
+	 * it has work left, so the passes are counted; one with nothing pending costs next to nothing. A
+	 * longer chain goes on at the microtask, as any write outside an event.
 	 */
 	private flush(): void {
-		const passes = this.flushes.length > 1 ? 2 : 1;
+		const passes = this.flushes.length > 1 ? CROSS_PASSES : 1;
 		for (let pass = 0; pass < passes; pass++) {
 			for (const flush of this.flushes) {
 				flush();
