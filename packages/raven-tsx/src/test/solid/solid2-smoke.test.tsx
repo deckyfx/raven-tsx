@@ -349,15 +349,22 @@ test("an update of another tree that fails throws from render before this tree c
 	const [failing, setFailing] = createSignal(false);
 	mount(() => <FailingLabel name="a" failing={failing()} />);
 	const other = createWindow(WINDOW);
+	// (no Errored takes it: it is uncaught, and Solid stops and gives it to reportError, which ends
+	// Bun and Node.js: kept here. render does not take that back, which is the other tree's)
+	const reported: unknown[] = [];
+	const report = globalThis.reportError;
+	globalThis.reportError = (error) => void reported.push(error);
 	try {
 		other.root.render(() => <Label Name="b" Text="before" />);
 		setFailing(true);
 		expect(() => other.root.render(() => <Label Name="b" Text="after" />)).toThrow("from a");
 		expect(r.Rlabel_get_text(r.Rwidget_find(other.window, "b"))).toBe("before");
+		expect(reported.map((error) => (error as Error).message)).toEqual(["from a"]);
 	} finally {
+		globalThis.reportError = report;
 		other.root.unmount();
 		r.Rwindow_destroy(other.window);
-		// (no Errored took it: Solid stopped, as it does, for the tests after)
+		// (for the tests after)
 		resetErrorHalt();
 	}
 });

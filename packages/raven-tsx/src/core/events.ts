@@ -104,24 +104,18 @@ export class EventScope {
 	/**
 	 * Runs a handler of the user, and commits what it changed, then `afterwards`: also when the handler
 	 * throws, after what it wrote before (the next event must not read it uncommitted, and a controlled
-	 * widget goes back to its props).
+	 * widget goes back to its props). Each step that throws is said on its own: one does not hide another.
 	 */
 	run(handler: () => void, afterwards?: () => void): void {
 		if (this.ignoringDepth > 0) {
 			return;
 		}
 		this.wrap(() => {
-			this.guard(() => {
-				try {
-					handler();
-				} finally {
-					try {
-						this.flush();
-					} finally {
-						afterwards?.();
-					}
-				}
-			});
+			this.guard(handler);
+			this.guard(() => this.flush());
+			if (afterwards) {
+				this.guard(afterwards);
+			}
 		});
 	}
 }

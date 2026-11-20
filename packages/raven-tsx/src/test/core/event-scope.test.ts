@@ -106,3 +106,19 @@ test("the put-back runs when a commit throws", () => {
 		said.mockRestore();
 	}
 });
+
+test("a handler that throws and a commit that throws after it are both said", () => {
+	const scope = new EventScope();
+	scope.addFlush(() => {
+		throw new Error("in the commit");
+	});
+	const said = spyOn(console, "error").mockImplementation(() => {});
+	try {
+		scope.run(() => {
+			throw new Error("in the handler");
+		});
+		expect(said.mock.calls.map((call) => (call[1] as Error).message)).toEqual(["in the handler", "in the commit"]);
+	} finally {
+		said.mockRestore();
+	}
+});
