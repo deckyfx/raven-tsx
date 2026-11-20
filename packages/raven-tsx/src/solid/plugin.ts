@@ -58,10 +58,12 @@ function clientFilesOf(root: string, development: boolean): ReadonlyMap<string, 
 		const map = new Map<string, string>();
 		for (const entry of Object.values(exports)) {
 			for (const style of ["import", "require"]) {
-				// (Bun takes the development builds itself when it builds without minifying: those too)
-				for (const bunDevelopment of [false, true]) {
-					const server = pick(entry, ["node", ...(bunDevelopment ? ["development"] : []), style, "default"]);
-					const client = pick(entry, ["browser", ...(bunDevelopment || development ? ["development"] : []), style, "default"]);
+				// (the builds Bun takes by the conditions it is given: the development ones itself unless it
+				// started with NODE_ENV=production, the observed ones with `--conditions=observe`. Each is replaced
+				// by the client's of the same kind; the plain one by the development one when asked)
+				for (const kind of [[], ["development"], ["observe"]]) {
+					const server = pick(entry, ["node", ...kind, style, "default"]);
+					const client = pick(entry, ["browser", ...(kind.length > 0 ? kind : development ? ["development"] : []), style, "default"]);
 					if (server && client && server !== client) {
 						map.set(resolve(root, server), resolve(root, client));
 					}

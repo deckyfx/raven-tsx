@@ -27,8 +27,13 @@ export class RavenRoot {
 	 * what it made goes (its cleanups run, its widgets go) and the error goes on. (as Solid's
 	 * `render`, but the root is kept before the code runs: `render` gives it back only once the code
 	 * has returned)
+	 *
+	 * What other trees have pending is applied first: an error there is theirs, and goes to the
+	 * caller before this tree changes, which keeps the one it had.
 	 */
 	render(code: () => JSX.Element): void {
+		// (Solid's flush is for all its trees: the one below would take their errors for this tree's)
+		flush();
 		this.unmount();
 		// (a cleanup may have rendered a tree again: this render replaces that one too)
 		while (this.dispose !== null) {

@@ -42,9 +42,9 @@ type IndexAndFlagHandler = (index: number, flag: boolean) => void;
 /**
  * Runs what a native event starts: the handler, then the commit of what it changed.
  * The commit happens before the next event, as in a browser: a discrete event must not
- * leave state behind for the next click to read.
+ * leave state behind for the next click to read. The package has one, `eventScope`.
  */
-class EventScope {
+export class EventScope {
 	/** What commits pending updates, one per framework: React and Solid may run side by side. */
 	private readonly flushes: (() => void)[] = [];
 	private wrap: (run: () => void) => void = (run) => run();
@@ -55,10 +55,17 @@ class EventScope {
 		this.flushes.push(flush);
 	}
 
-	/** Commits what every framework has pending. */
+	/**
+	 * Commits what every framework has pending. Twice when there are several: the commit of one can
+	 * give the other work (an effect of Solid that sets a state of React, a layout effect of React
+	 * that writes a signal), whichever came first; a commit with nothing pending does nothing.
+	 */
 	private flush(): void {
-		for (const flush of this.flushes) {
-			flush();
+		const passes = this.flushes.length > 1 ? 2 : 1;
+		for (let pass = 0; pass < passes; pass++) {
+			for (const flush of this.flushes) {
+				flush();
+			}
 		}
 	}
 
@@ -94,16 +101,26 @@ class EventScope {
 		}
 	}
 
-	/** Runs a handler of the user, and commits what it changed. */
+	/**
+	 * Runs a handler of the user, and commits what it changed, then `afterwards`: also when the handler
+	 * throws, after what it wrote before (the next event must not read it uncommitted, and a controlled
+	 * widget goes back to its props).
+	 */
 	run(handler: () => void, afterwards?: () => void): void {
 		if (this.ignoringDepth > 0) {
 			return;
 		}
 		this.wrap(() => {
 			this.guard(() => {
-				handler();
-				this.flush();
-				afterwards?.();
+				try {
+					handler();
+				} finally {
+					try {
+						this.flush();
+					} finally {
+						afterwards?.();
+					}
+				}
 			});
 		});
 	}

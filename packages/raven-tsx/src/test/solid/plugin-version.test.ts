@@ -49,7 +49,7 @@ function fakePackage(modules: string, name: string, version: string): void {
 function solidPackages(modules: string, solid: string, universal: string | null = "2.0.3"): void {
 	fakePackage(modules, "solid-js", solid);
 	if (universal !== null) {
-		fakePackage(modules, join("@solidjs", "universal"), universal);
+		fakePackage(modules, "@solidjs/universal", universal);
 	}
 }
 

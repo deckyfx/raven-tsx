@@ -2,7 +2,7 @@
 /** Solid 2 on real Raven widgets, headless: what the renderer, the compiler and the flush at the end of an event give. */
 
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { createSignal, Errored, flush, For, onCleanup, onSettled, Show } from "solid-js";
+import { createSignal, Errored, flush, For, onCleanup, onSettled, resetErrorHalt, Show } from "solid-js";
 import * as r from "../../core/raven";
 import { eventStats } from "../../core/events";
 import { createElement, insert } from "../../solid/renderer";
@@ -328,4 +328,90 @@ two`}
 	const error = new Error("here"); // (the line this test looks for)
 	const line = (await Bun.file(import.meta.path).text()).split("\n").findIndex((each) => each.includes("// (the line this test looks for)")) + 1;
 	expect(error.stack).toContain(`solid2-smoke.test.tsx:${line}:`);
+});
+
+/** A label whose text throws once `failing` says so. */
+function FailingLabel(props: { readonly name: string; readonly failing: boolean }): JSX.Element {
+	return (
+		<Label
+			Name={props.name}
+			Text={(() => {
+				if (props.failing) {
+					throw new Error(`from ${props.name}`);
+				}
+				return "fine";
+			})()}
+		/>
+	);
+}
+
+test("an update of another tree that fails throws from render before this tree changes, which keeps the one it had", () => {
+	const [failing, setFailing] = createSignal(false);
+	mount(() => <FailingLabel name="a" failing={failing()} />);
+	const other = createWindow(WINDOW);
+	try {
+		other.root.render(() => <Label Name="b" Text="before" />);
+		setFailing(true);
+		expect(() => other.root.render(() => <Label Name="b" Text="after" />)).toThrow("from a");
+		expect(r.Rlabel_get_text(r.Rwidget_find(other.window, "b"))).toBe("before");
+	} finally {
+		other.root.unmount();
+		r.Rwindow_destroy(other.window);
+		// (no Errored took it: Solid stopped, as it does, for the tests after)
+		resetErrorHalt();
+	}
+});
+
+/** Clicks `fail`, which makes the label `a` throw, then changes the text of another tree: what that tree shows after. */
+function otherTreeAfterFailure(setFailing: (failing: boolean) => void): string | null {
+	const [label, setLabel] = createSignal("one");
+	const other = createWindow(WINDOW);
+	try {
+		other.root.render(() => <Label Name="b" Text={label()} />);
+		r.Rdraw_frame();
+		click("fail");
+		setFailing(true);
+		setLabel("two");
+		flush();
+		return r.Rlabel_get_text(r.Rwidget_find(other.window, "b"));
+	} finally {
+		other.root.unmount();
+		r.Rwindow_destroy(other.window);
+	}
+}
+
+test("an error of an event that an Errored takes leaves the other trees reacting", () => {
+	const [failing, setFailing] = createSignal(false);
+	mount(() => (
+		<VBox Name="box">
+			<Errored fallback={<Label Name="caught">caught</Label>}>
+				<FailingLabel name="a" failing={failing()} />
+			</Errored>
+			<Button Name="fail" OnClicked={() => setFailing(true)}>fail</Button>
+		</VBox>
+	));
+	expect(otherTreeAfterFailure(setFailing)).toBe("two");
+	expect(text("caught")).toBe("caught");
+});
+
+test("an error of an event that no Errored takes is uncaught: Solid stops, in every tree, and reports it", () => {
+	const [failing, setFailing] = createSignal(false);
+	mount(() => (
+		<VBox Name="box">
+			<FailingLabel name="a" failing={failing()} />
+			<Button Name="fail" OnClicked={() => setFailing(true)}>fail</Button>
+		</VBox>
+	));
+	// (Solid gives it to reportError, which ends Bun and Node.js as an uncaught exception: kept here)
+	const reported: unknown[] = [];
+	const report = globalThis.reportError;
+	globalThis.reportError = (error) => void reported.push(error);
+	try {
+		expect(otherTreeAfterFailure(setFailing)).toBe("one");
+		expect(reported.map((error) => (error as Error).message)).toEqual(["from a"]);
+	} finally {
+		globalThis.reportError = report;
+		// (for the tests after)
+		resetErrorHalt();
+	}
 });

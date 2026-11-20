@@ -3,3 +3,5 @@ dist/
 binaries/
 # made from a Raven you built, by bun run native:local
 native/
+# what src/test/solid/plugin-builds.test.ts builds in, should a run stop before it is removed
+.plugin-build-*/
