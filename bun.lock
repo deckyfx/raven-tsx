@@ -65,6 +65,18 @@
         "@types/react": "^19",
       },
     },
+    "examples/device": {
+      "name": "example-device",
+      "dependencies": {
+        "@decky.fx/raven-tsx": "workspace:*",
+        "react": "^19.3.0",
+        "react-reconciler": "^0.34.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/react": "^19",
+      },
+    },
     "examples/editor": {
       "name": "example-editor",
       "dependencies": {
@@ -360,6 +372,8 @@
 
     "example-components": ["example-components@workspace:examples/components"],
 
+    "example-device": ["example-device@workspace:examples/device"],
+
     "example-editor": ["example-editor@workspace:examples/editor"],
 
     "example-effects": ["example-effects@workspace:examples/effects"],
@@ -409,5 +423,9 @@
     "typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "undici-types": ["undici-types@8.9.0", "", {}, "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg=="],
+
+    "example-device/@types/bun": ["@types/bun@1.4.5", "", { "dependencies": { "bun-types": "1.4.5" } }, "sha512-DpgwNI9z0L1S0gtb45QLCWgwCUcMLnsHYMJHQvpNj7erGiCGBvpggltAIeARrtobNMKMuy0UP7i56tKKgwFs/Q=="],
+
+    "example-device/@types/bun/bun-types": ["bun-types@1.4.5", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-ECHn+9dhL3wv0G6u0+7dQvrnaimXiRDxxerYBmhTaLyJEEuvTPWk2Fye3XIf5Y++JIIiHKfQw4Z7V5D8KuiXbg=="],
   }
 }
