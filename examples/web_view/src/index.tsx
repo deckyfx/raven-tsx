@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, ColorPicker, HBox, Label, raven, runApp, Separator, SystemWebView, TextInput, VBox, type WidgetInstance } from "@decky.fx/raven-tsx/react";
+import { Button, ColorPicker, HBox, Label, raven, runApp, Separator, SystemWebView, TextInput, VBox, webCallback, type WidgetInstance } from "@decky.fx/raven-tsx/react";
 
 const WELCOME_PAGE = `${import.meta.dir}/../pages/welcome.html`;
 
@@ -83,13 +83,20 @@ function App(): ReactNode {
 		raven.Rsystem_web_view_run_javascript(view(), `document.documentElement.style.setProperty('--accent', '${hex}')`, null);
 	};
 
+	/**
+	 * What receives the answers of the scripts: one native callback for every request, as the original
+	 * gives one C function. A function given at each call would be a new native callback each time,
+	 * which the binding keeps for ever. (`webCallback("result")` has the shape of
+	 * `RSystemWebViewResultCallback`: the view, the result, the error.)
+	 */
+	const answer = useRef<ReturnType<typeof webCallback> | null>(null);
+
 	/** The answer of a script, as JSON. */
 	const askSize = (): void => {
-		raven.Rsystem_web_view_run_javascript(
-			view(),
-			"({ width: innerWidth, height: innerHeight, links: document.links.length, engine: navigator.vendor })",
-			(_view, result, error) => setLog(result ? `The page answered:\n\n\`${result.slice(0, 300)}\`` : `The script failed: ${(error ?? "").slice(0, 300)}`),
+		answer.current ??= webCallback("result", (_view, result, error) =>
+			setLog(result ? `The page answered:\n\n\`${result.slice(0, 300)}\`` : `The script failed: ${(error ?? "").slice(0, 300)}`),
 		);
+		raven.Rsystem_web_view_run_javascript(view(), "({ width: innerWidth, height: innerHeight, links: document.links.length, engine: navigator.vendor })", answer.current);
 	};
 
 	return (

@@ -36,8 +36,12 @@ const IMAGE = /\.(png|jpe?g|gif|bmp|tga|svg|webp)$/i;
 /** Whether Raven can show a file as a picture. */
 const isImage = (file: PickedFile): boolean => (file.mimeType?.startsWith("image/") === true && file.mimeType !== "image/heic") || IMAGE.test(file.name || (file.path ?? ""));
 
-/** A texture made from a file on a worker thread, destroyed when the next one comes or the component goes. */
-function useTexture(path: string | null): raven.Rid {
+/**
+ * A texture made from a file on a worker thread, destroyed when the next one comes or the component goes.
+ * `selection` is what the user picked: picking the same path again makes the texture again, as the file may
+ * have changed (the showcase makes one at each pick).
+ */
+function useTexture(path: string | null, selection: object | null): raven.Rid {
 	const [texture, setTexture] = useState<raven.Rid>(raven.R_INVALID_ID);
 	useEffect(() => {
 		if (!path) {
@@ -47,7 +51,7 @@ function useTexture(path: string | null): raven.Rid {
 		const made = raven.Rtexture_create_from_file_async(path);
 		setTexture(made);
 		return () => raven.Rtexture_destroy(made);
-	}, [path]);
+	}, [path, selection]);
 	return texture;
 }
 
@@ -79,8 +83,8 @@ function App(): ReactNode {
 	const [photo, setPhoto] = useState<PickedFile | null>(null);
 	const [file, setFile] = useState<{ readonly picked: PickedFile; readonly firstLine: string } | null>(null);
 	const [clipboard, setClipboard] = useState("Clipboard: copy something, then paste it.");
-	const photoTexture = useTexture(photo?.path ?? null);
-	const fileTexture = useTexture(file && isImage(file.picked) ? file.picked.path : null);
+	const photoTexture = useTexture(photo?.path ?? null, photo);
+	const fileTexture = useTexture(file && isImage(file.picked) ? file.picked.path : null, file);
 
 	/** Says what a request answered, and gives its files when it is done. */
 	const told = (what: string, answer: DeviceAnswer): readonly PickedFile[] => {
@@ -101,10 +105,14 @@ function App(): ReactNode {
 		if (!first) {
 			return;
 		}
-		// (a small text: its first line)
+		// (a small text: its first line; a file that cannot be read is still the one picked)
 		let firstLine = "";
 		if (first.path && !isImage(first) && first.size > 0 && first.size < 65536) {
-			firstLine = (await Bun.file(first.path).text()).split(/\r?\n/, 1)[0]?.slice(0, 60) ?? "";
+			try {
+				firstLine = (await Bun.file(first.path).text()).split(/\r?\n/, 1)[0]?.slice(0, 60) ?? "";
+			} catch {
+				firstLine = "";
+			}
 		}
 		setFile({ picked: first, firstLine });
 	};

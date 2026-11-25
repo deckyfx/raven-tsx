@@ -110,7 +110,6 @@ const TASK_COLUMNS = [
 function TasksPanel({ say }: { say: (title: string, detail: string) => void }): ReactNode {
 	const table = useRef<WidgetInstance>(null);
 	const [tasks, setTasks] = useState<readonly Task[]>(TASKS);
-	const [assignee, setAssignee] = useState(-1);
 
 	const setCells = (row: number, cells: Readonly<Record<number, string>>): void => {
 		setTasks((list) => list.map((task, index) => (index === row ? (task.map((cell, column) => cells[column] ?? cell) as unknown as Task) : task)));
@@ -145,7 +144,6 @@ function TasksPanel({ say }: { say: (title: string, detail: string) => void }): 
 
 	/** Every selected task goes to the person chosen: the selection is read range by range. */
 	const assign = (person: number): void => {
-		setAssignee(person);
 		const name = PEOPLE[person];
 		const widget = table.current?.widget;
 		if (name === undefined || widget === undefined) {
@@ -169,7 +167,8 @@ function TasksPanel({ say }: { say: (title: string, detail: string) => void }): 
 		<VBox Name="tasks" Spacing={8} Slot={{ Title: "Tasks", Dock: "Tab", DockTo: "welcome", Padding: 12 }}>
 			<HBox Spacing={8}>
 				<Label Text="Assign the selected tasks to" Slot={{ VAlign: "Center" }} />
-				<ComboBox Name="assignee" Searchable Width={200} Items={PEOPLE} Selected={assignee} OnChanged={assign} />
+				{/* (a menu: it goes back to no one after each choice, so the same person chosen again for other tasks assigns them too) */}
+				<ComboBox Name="assignee" Searchable Width={200} Items={PEOPLE} Selected={-1} OnChanged={assign} />
 			</HBox>
 			<Table
 				ref={table}

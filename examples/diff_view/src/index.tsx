@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, Checkbox, ComboBox, DiffView, HBox, Label, raven, runApp, VBox, type WidgetInstance } from "@decky.fx/raven-tsx/react";
+import { Button, Checkbox, ComboBox, DiffView, HBox, Label, raven, runApp, useFrame, VBox, type WidgetInstance } from "@decky.fx/raven-tsx/react";
 
 const SAMPLES = `${import.meta.dir}/../samples`;
 
@@ -61,6 +61,15 @@ function App(): ReactNode {
 
 	// (the changes are counted again when the mode, the spaces or the context change)
 	useEffect(() => refresh(), [split, spaces, context]);
+
+	// (F7 and Shift+F7 move to a change inside the view, with no callback: the status follows it at
+	// the next frame; the same text sets no state)
+	useFrame(() => {
+		const widget = diff.current?.widget;
+		if (widget !== undefined) {
+			setStatus(statusOf(widget, line));
+		}
+	});
 
 	const next = (): void => {
 		const widget = diff.current?.widget;
