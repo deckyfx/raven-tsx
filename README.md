@@ -51,6 +51,8 @@ The C examples of Raven are ported to TSX in [examples](examples), with the same
 | [carousel](examples/carousel) | An onboarding in pages that swipe, with dots, arrows, a loop and an autoplay ([screenshot](docs/screenshots/carousel.png)) |
 | [charts](examples/charts) | A dashboard of pies, donuts, gauges, sparklines and a heatmap, with live data ([screenshot](docs/screenshots/charts.png)) |
 | [device](examples/device) | The services of the device: permissions as state, the camera, the photo and file pickers, a save, the share sheet, haptics, the clipboard; `bun run smoke` plays it headless ([screenshot](docs/screenshots/device.png)) |
+| [diff_view](examples/diff_view) | Two versions of a file compared side by side or in one column, from change to change, with a note on a line ([screenshot](docs/screenshots/diff_view.png)) |
+| [web_view](examples/web_view) | A page shown by the web engine of the system (WKWebView on macOS), talking to the application both ways |
 | [map](examples/map) | A map whose tiles the application draws on worker threads, with markers and flights between places ([screenshot](docs/screenshots/map.png)) |
 | [browser](examples/browser), [editor](examples/editor), [effects](examples/effects), [music](examples/music), [notepad](examples/notepad), [studio](examples/studio), [themes](examples/themes), [workspace](examples/workspace) | Shown above |
 

@@ -77,6 +77,18 @@
         "@types/react": "^19",
       },
     },
+    "examples/diff_view": {
+      "name": "example-diff-view",
+      "dependencies": {
+        "@decky.fx/raven-tsx": "workspace:*",
+        "react": "^19.3.0",
+        "react-reconciler": "^0.34.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/react": "^19",
+      },
+    },
     "examples/editor": {
       "name": "example-editor",
       "dependencies": {
@@ -263,6 +275,18 @@
         "@types/react": "^19",
       },
     },
+    "examples/web_view": {
+      "name": "example-web-view",
+      "dependencies": {
+        "@decky.fx/raven-tsx": "workspace:*",
+        "react": "^19.3.0",
+        "react-reconciler": "^0.34.0",
+      },
+      "devDependencies": {
+        "@types/bun": "latest",
+        "@types/react": "^19",
+      },
+    },
     "examples/workspace": {
       "name": "example-workspace",
       "dependencies": {
@@ -374,6 +398,8 @@
 
     "example-device": ["example-device@workspace:examples/device"],
 
+    "example-diff-view": ["example-diff-view@workspace:examples/diff_view"],
+
     "example-editor": ["example-editor@workspace:examples/editor"],
 
     "example-effects": ["example-effects@workspace:examples/effects"],
@@ -399,6 +425,8 @@
     "example-viewport_opengl": ["example-viewport_opengl@workspace:examples/viewport_opengl"],
 
     "example-viewport_vulkan": ["example-viewport_vulkan@workspace:examples/viewport_vulkan"],
+
+    "example-web-view": ["example-web-view@workspace:examples/web_view"],
 
     "example-workspace": ["example-workspace@workspace:examples/workspace"],
 
@@ -426,6 +454,14 @@
 
     "example-device/@types/bun": ["@types/bun@1.4.5", "", { "dependencies": { "bun-types": "1.4.5" } }, "sha512-DpgwNI9z0L1S0gtb45QLCWgwCUcMLnsHYMJHQvpNj7erGiCGBvpggltAIeARrtobNMKMuy0UP7i56tKKgwFs/Q=="],
 
+    "example-diff-view/@types/bun": ["@types/bun@1.4.5", "", { "dependencies": { "bun-types": "1.4.5" } }, "sha512-DpgwNI9z0L1S0gtb45QLCWgwCUcMLnsHYMJHQvpNj7erGiCGBvpggltAIeARrtobNMKMuy0UP7i56tKKgwFs/Q=="],
+
+    "example-web-view/@types/bun": ["@types/bun@1.4.5", "", { "dependencies": { "bun-types": "1.4.5" } }, "sha512-DpgwNI9z0L1S0gtb45QLCWgwCUcMLnsHYMJHQvpNj7erGiCGBvpggltAIeARrtobNMKMuy0UP7i56tKKgwFs/Q=="],
+
     "example-device/@types/bun/bun-types": ["bun-types@1.4.5", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-ECHn+9dhL3wv0G6u0+7dQvrnaimXiRDxxerYBmhTaLyJEEuvTPWk2Fye3XIf5Y++JIIiHKfQw4Z7V5D8KuiXbg=="],
+
+    "example-diff-view/@types/bun/bun-types": ["bun-types@1.4.5", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-ECHn+9dhL3wv0G6u0+7dQvrnaimXiRDxxerYBmhTaLyJEEuvTPWk2Fye3XIf5Y++JIIiHKfQw4Z7V5D8KuiXbg=="],
+
+    "example-web-view/@types/bun/bun-types": ["bun-types@1.4.5", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-ECHn+9dhL3wv0G6u0+7dQvrnaimXiRDxxerYBmhTaLyJEEuvTPWk2Fye3XIf5Y++JIIiHKfQw4Z7V5D8KuiXbg=="],
   }
 }

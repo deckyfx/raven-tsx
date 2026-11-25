@@ -15,6 +15,10 @@ c8b326d40b6b997991996e9ae523d5a7b1ab7506 1092a82 examples/components/components.
 630ba32f1ec2bd0ae025c79bde3d72bc5cd7ada7 899a268 examples/components/main.c
 e4e6706cd09441b988a2b820cdca779dde65730a 1092a82 examples/components/theme.xml
 7aed65e627027c67c41b608b1bf79a90740525f3 1092a82 examples/components/widgets.xml
+21c32581ef800334360260d583fbd774fe21cf16 fc37a06 examples/diff_view/diff_view.xml
+067b599b35d2402fe54f9bf1037c831433983f4c fc37a06 examples/diff_view/main.c
+a3933184f22b48b0978337df4a72a9bf4968e50f fc37a06 examples/diff_view/samples/v1.0/server.c
+936bb412328fcdfadaa76da0b3fabf4146eb6150 fc37a06 examples/diff_view/samples/v1.1/server.c
 637f8124d49654c2008278deef5bf65204a6d242 1092a82 examples/editor/editor.xml
 57fc5032ada88e1de1f1115adf0af639e5cca334 899a268 examples/editor/main.c
 72e12cf61a4d31da20a06a7430c78075287a9760 1092a82 examples/effects/effects.xml
@@ -77,6 +81,9 @@ edbb92b936f23e0b51a8888a20a9d5d7d66f6757 1092a82 examples/viewport_vulkan/shader
 a451a36a30b7483d660ea5c83b95065c6f21b45b 899a268 examples/web/index.html
 2f56ab63ecb550d417cd69332974cdab34b99476 899a268 examples/web/main.c
 aa0367d15ac609312fd94b13106c38e98eb6d09e fc37a06 examples/web/shell.html
+0c43e8200da12253b70b185b03bff51c8dd70ab8 fc37a06 examples/web_view/main.c
+226c148d9efdb44d171aac3509dd3ee1a844d77b fc37a06 examples/web_view/pages/welcome.html
+cfdd07a5b4c391c32ea935815591ac89235fe31e fc37a06 examples/web_view/web_view.xml
 ca3bbc100d35ec202ff32e450d1101d75646945d fc37a06 examples/workspace/main.c
 516468e17b0aaaae9f75cb65005f395b91b4ca2c fc37a06 examples/workspace/workspace.xml
 6c9b882eeb005643ca156e73a187c44088d71aa8 ede33eb src/widget/actions.c
