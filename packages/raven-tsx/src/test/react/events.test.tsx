@@ -7,7 +7,7 @@ import { createContext, createRef, useContext, useLayoutEffect, useRef, useState
 import * as r from "../../core/raven";
 import { eventStats, nextFrame } from "../../core/events";
 import {
-	BlockEditor, Button, Carousel, Chart, ColorPicker, ComboBox, createPortal, createWindow, Custom, DiffView, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, SystemWebView, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
+	BlockEditor, Button, Carousel, Chart, ColorPicker, ComboBox, createPortal, createWindow, Custom, DiffView, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, SystemWebView, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, usePermission, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
 	type WidgetInstance, type WindowInstance,
 } from "../../react/index";
 
@@ -1655,4 +1655,19 @@ test("a SystemWebView and an Image take the functions of their events, and give 
 	// (in a headless run there is no engine of the system: it says so, and keeps what it was given)
 	expect(r.Rsystem_web_view_is_supported()).toBeOneOf([0, 1]);
 	expect(r.Rwidget_is_valid(page.current?.widget ?? r.R_INVALID_ID)).toBe(1);
+});
+
+test("usePermission gives the status as state, and the answer of a request", async () => {
+	const held: { ask?: () => Promise<string> } = {};
+	function Camera(): ReactNode {
+		const [status, request] = usePermission("camera");
+		held.ask = request;
+		return <VBox><Label Name="status">{status}</Label></VBox>;
+	}
+	await mount(<Camera />);
+	expect(r.Rlabel_get_text(find("status"))).toBe("unsupported");
+	const answer = held.ask?.();
+	await settle();
+	expect(await answer).toBe("unsupported");
+	expect(r.Rlabel_get_text(find("status"))).toBe("unsupported");
 });

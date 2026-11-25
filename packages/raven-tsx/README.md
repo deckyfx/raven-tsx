@@ -34,7 +34,7 @@ For Solid, see [Solid](#solid). The frameworks are optional peer dependencies: a
 | `@decky.fx/raven-tsx/react` | The components, `runApp`, the hooks and `registerTag`, for React, and everything of the core |
 | `@decky.fx/raven-tsx/solid` | The same for Solid, with `create...` functions in place of the hooks |
 | `@decky.fx/raven-tsx/solid/preload`, `/solid/plugin` | The Bun plugin that compiles TSX for Solid: to preload, or to give `Bun.build` |
-| `@decky.fx/raven-tsx` | The core, for code that is not a component: `defineTheme`, `loadTheme`, `raven`, and `onAction`, `onShortcut`, `onFrame`, which each return what stops them |
+| `@decky.fx/raven-tsx` | The core, for code that is not a component: `defineTheme`, `loadTheme`, `raven`, `onAction`, `onShortcut`, `onFrame`, which each return what stops them, and the [services of the device](#the-device) |
 
 ```json
 { "compilerOptions": { "jsx": "react-jsx", "types": ["bun", "react"] } }
@@ -443,6 +443,47 @@ useEffect(() => {
 ```
 
 An `Image` shows an SVG file like any other: `<Image Source="logo.svg" />`.
+
+## The device
+
+The services of the device are functions of the core, exported by each adapter too, with promises: permissions, the pickers and the camera of the system, the share sheet, haptics. On a phone they show a screen of the system while the application runs on. On a desktop the pickers are Raven's file dialogs, and the camera and the share sheet answer `"unsupported"`, as do the permissions, but for notifications.
+
+```tsx
+import { openFiles, requestPermission, saveFile, share, takePhoto } from "@decky.fx/raven-tsx/react";
+
+const { result, files } = await openFiles({ filters: [{ name: "Images", patterns: "*.png;*.jpg" }], multiple: true });
+if (result === "done") {
+	for (const file of files) console.log(file.path, file.name, file.size);
+}
+await saveFile(JSON.stringify(data), { fileName: "data.json", window: main.current });
+const status = await requestPermission("camera"); // "granted", "denied", "blocked", "unsupported"...
+```
+
+| Function | Answer |
+|---|---|
+| `requestPermission(name)` | the status, once the user answered: `"unsupported"`, `"not-asked"`, `"granted"`, `"limited"`, `"denied"` or `"blocked"` |
+| `openFiles(options)`, `pickPhotos(max)`, `takePhoto()` | `{ result, files }` |
+| `saveFile(data, options)`, `exportFile(path, options)`, `selectFolder(options)` | `{ result, files }`: the file saved, or the folder |
+| `share({ text, path, mimeType, title, anchor })` | `{ result, files: [] }` |
+
+`result` is `"done"`, `"cancelled"`, `"denied"` (a permission it needs was refused), `"unsupported"`, `"busy"` (another screen of the system is open: one at a time) or `"failed"`, and `files` holds something only when it is `"done"`: a `path` Raven and the file system can read (on iOS and Android a copy in the cache), the `name` the user saw, `mimeType`, `size`, and `width` and `height` of a photo. `options` of a picker are `window` (a handle or the ref of a `<Window>`), `title`, `directory`, `fileName`, `filters`, `defaultExtension` and `multiple`, each optional.
+
+Each answer comes once, at a later frame, never inside the call, and what awaits it runs as after a timer. A request needs Raven running, and throws a `RavenError` otherwise: one still open when Raven stops is never answered, as in C. Nothing is made for each request: one native callback serves them all.
+
+What answers at once is a plain function: `getPermission(name)` (the status, without asking), `openSettings()` (the page of the application in the Settings of the system), `isCameraAvailable()`, `isHapticSupported()`, `haptic("light" | "medium" | "heavy" | "selection" | "success" | "warning" | "error")`, `openUrl(url)` and `clipboardHasText()`, the last four with whether it happened. `watchPermission(name, handler)` calls the function with the status now and at each change, as when the user changed it in the Settings while the application was away (it reads it twice a second), and returns what stops it.
+
+`usePermission(name)` of React, and `createPermission(name)` of Solid, are that as state: the status, and the function that asks.
+
+```tsx
+function Camera(): ReactNode {
+	const [camera, askCamera] = usePermission("camera");
+	return camera === "granted" ? <Button OnClicked={() => void takePhoto().then(show)}>Take a photo</Button>
+		: camera === "blocked" ? <Button OnClicked={openSettings}>Allow the camera in Settings</Button>
+		: <Button OnClicked={() => void askCamera()}>Use the camera</Button>;
+}
+```
+
+They work on Bun and on Node.js alike. What a phone application declares for each (its manifest, its Info.plist) is listed in Raven's `include/raven/raven_device.h`.
 
 ## What to expect
 

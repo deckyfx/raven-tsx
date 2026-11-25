@@ -20,7 +20,7 @@
 
 export * from "../core";
 export * from "./components.generated";
-export { useAction, useFrame, useShortcut } from "./hooks";
+export { useAction, useFrame, usePermission, useShortcut } from "./hooks";
 export { createPortal, createWindow, RavenRoot, runApp, type RunOptions } from "./root";
 export { registerTag, type TagOptions } from "./tags";
 export { WebView } from "./web";

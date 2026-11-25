@@ -5,6 +5,7 @@
  */
 
 import { createEffect, createSignal, onCleanup, onSettled } from "solid-js";
+import { getPermission, requestPermission, watchPermission, type Permission, type PermissionStatus } from "../core/device";
 import type * as r from "../core/raven";
 import type { FrameHandler } from "../core/frame";
 import { onAction, onFrame, onShortcut } from "../core/subscriptions";
@@ -45,4 +46,22 @@ export function createShortcut(window: () => WindowInstance | null | undefined, 
  */
 export function createFrame(handler: FrameHandler): void {
 	onCleanup(onFrame(handler));
+}
+
+/**
+ * The status of a permission, as a signal, and what asks for it: `const [camera, askCamera] = createPermission("camera")`.
+ * It follows what the user answers, and what they change in the Settings of the system while the
+ * application is away. Asking gives the answer too, and needs Raven running.
+ */
+export function createPermission(name: Permission): readonly [() => PermissionStatus, () => Promise<PermissionStatus>] {
+	const [status, setStatus] = createSignal<PermissionStatus>(getPermission(name));
+	onCleanup(watchPermission(name, (now) => {
+		setStatus(now);
+	}));
+	const ask = async (): Promise<PermissionStatus> => {
+		const answer = await requestPermission(name);
+		setStatus(answer);
+		return answer;
+	};
+	return [status, ask] as const;
 }

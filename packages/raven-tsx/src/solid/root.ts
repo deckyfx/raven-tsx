@@ -1,6 +1,7 @@
 import { createComponent, createRoot, flush, resetErrorHalt } from "solid-js";
 import * as r from "../core/raven";
 import { RavenError } from "../core/errors";
+import { forgetDeviceRequests } from "../core/device";
 import { nextFrame } from "../core/events";
 import { resolveProps, type RavenProps } from "../core/props";
 import type { WindowOptions } from "../core/props.generated";
@@ -141,6 +142,8 @@ export async function runApp(code: () => JSX.Element, options?: WindowOptions, s
 			r.Rshutdown();
 			// (the tasks Raven dropped as it stopped: what waited for them would wait for ever)
 			nextFrame.clear();
+			// (and the requests of the device: Raven forgets them unanswered)
+			forgetDeviceRequests();
 		}
 	}
 }
