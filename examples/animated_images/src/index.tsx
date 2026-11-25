@@ -101,7 +101,8 @@ function App(): ReactNode {
 			</UniformGrid>
 
 			<HBox Spacing={10}>
-				<Button Name="play" Text="Play" Style="Primary" OnClicked={() => each(raven.Rimage_play)} />
+				{/* (Play starts a countdown that ended again: it is not done any more) */}
+				<Button Name="play" Text="Play" Style="Primary" OnClicked={() => { each(raven.Rimage_play); setFinished(false); }} />
 				<Button Text="Pause" OnClicked={() => each(raven.Rimage_pause)} />
 				<Button Text="Stop" OnClicked={() => each(raven.Rimage_stop)} />
 				<Button Text="Replay countdown" OnClicked={replay} />

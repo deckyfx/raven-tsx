@@ -62,7 +62,7 @@ test("nothing typed: the form says so", async () => {
 	expect(r.Rtest_get_text(find("status"))).toBe("Type a user name");
 });
 
-test("a user types a name and a password, then signs in", async () => {
+test("a user types a name and a password, then signs in, and the window looks as it should", async () => {
 	expect(r.Rtest_type_text(find("user"), "ada")).toBe(1);
 	expect(r.Rtest_type_text(find("password"), "secret\n")).toBe(1);
 	await settle();
@@ -72,9 +72,12 @@ test("a user types a name and a password, then signs in", async () => {
 	expect(r.Rtest_get_text(find("user"))).toBe("ada");
 	expect(r.Rtest_get_text(find("status"))).toBe("Welcome, ada");
 	expect(errors).toEqual([]);
+	// (the picture in the same test: a test chosen by name alone would compare, or write, an empty form)
+	expectGolden();
 });
 
-test("and the window looks as it should", () => {
+/** The window, compared with its golden: "ada" signed in. */
+function expectGolden(): void {
 	const golden = `${GOLDENS}/login.${r.Rtest_get_platform_tag()}.png`;
 	if (!existsSync(golden) && !process.env["RAVEN_UPDATE_GOLDENS"]) {
 		console.log(`no golden for ${r.Rtest_get_platform_tag()}: the picture is not compared`);
@@ -88,4 +91,4 @@ test("and the window looks as it should", () => {
 	const same = r.Rtest_expect_golden(window, `${GOLDENS}/login.png`, options, result);
 	console.log(result.message);
 	expect(same).toBe(1);
-});
+}

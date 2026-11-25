@@ -11,7 +11,7 @@
  * they are not there: the line at the bottom tells each answer, as it comes.
  */
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
 	Border, Button, clipboardHasText, haptic, HBox, Image, isCameraAvailable, isHapticSupported, Label, openFiles, openSettings, openUrl, pickPhotos, raven, runApp,
 	saveFile, ScrollBox, share, takePhoto, usePermission, VBox, type DeviceAnswer, type DeviceResult, type Haptic, type Permission, type PickedFile,
@@ -99,7 +99,10 @@ function App(): ReactNode {
 		}
 	};
 
+	// (each pick counts: a slow read of an earlier one must not show it over a later one)
+	const picks = useRef(0);
 	const pickFile = async (): Promise<void> => {
+		const pick = ++picks.current;
 		setStatus("file picker...");
 		const [first] = told("pick a file", await openFiles());
 		if (!first) {
@@ -114,7 +117,9 @@ function App(): ReactNode {
 				firstLine = "";
 			}
 		}
-		setFile({ picked: first, firstLine });
+		if (pick === picks.current) {
+			setFile({ picked: first, firstLine });
+		}
 	};
 
 	const save = async (): Promise<void> => {
