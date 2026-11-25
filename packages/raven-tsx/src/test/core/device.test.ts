@@ -91,15 +91,34 @@ test("the camera and the share sheet are unsupported on a desktop, with no files
  */
 function playDialog(choose: (browser: r.Rid) => void): () => void {
 	let done = false;
+	let failure: { readonly error: unknown } | null = null;
 	const timer = r.Rtimer_create(0.01, 1, () => {
 		const browser = r.Rwindow_get_focused_widget(window);
 		if (!done && browser !== r.R_INVALID_ID && r.Rwidget_get_type(browser) === r.R_WIDGET_FILE_BROWSER) {
 			done = true;
-			choose(browser);
+			try {
+				choose(browser);
+			} catch (error) {
+				// (an error here would only be logged by the timer, and the dialog would wait for ever
+				// inside the frame of the test: it is kept for `stop`, and the dialog closed)
+				failure = { error };
+				escape();
+			}
 		}
 	});
-	return () => r.Rtimer_destroy(timer);
+	// (stops the timer, and throws what went wrong in the dialog, before the answer is checked)
+	return () => {
+		r.Rtimer_destroy(timer);
+		if (failure) {
+			throw failure.error;
+		}
+	};
 }
+
+const escape = (): void => {
+	r.Rwindow_inject_key(window, r.R_KEY_ESCAPE, 1, 0);
+	r.Rwindow_inject_key(window, r.R_KEY_ESCAPE, 0, 0);
+};
 
 const enter = (): void => {
 	r.Rwindow_inject_key(window, r.R_KEY_ENTER, 1, 0);
@@ -135,10 +154,7 @@ test("openFiles is answered with the file chosen in the dialog, its name, and it
 });
 
 test("a dialog closed without a choice is cancelled, with no files", async () => {
-	const stop = playDialog(() => {
-		r.Rwindow_inject_key(window, r.R_KEY_ESCAPE, 1, 0);
-		r.Rwindow_inject_key(window, r.R_KEY_ESCAPE, 0, 0);
-	});
+	const stop = playDialog(escape);
 	const answer: DeviceAnswer = await answered(pickPhotos(2));
 	stop();
 	expect(answer).toEqual({ result: "cancelled", files: [] });

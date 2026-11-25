@@ -91,15 +91,16 @@ const TASKS: readonly Task[] = [
 
 const PEOPLE = ["Zoë Martin", "Mazé Costa", "João Silva", "Ana Müller", "Björn Ångström", "Chloé Dubois", "Łukasz Nowak", "Renée Fournier", "Søren Holm", "Zoltán Kovács"];
 
+/** The columns of the tasks; none sorts, as the rows keep their order (a sort arrow would say otherwise). */
 const TASK_COLUMNS = [
-	'<Column Header="Task" Width="170" Editable="true"/>',
-	'<Column Header="Done" Width="56" Kind="Check"/>',
-	'<Column Header="Owner" Width="130" Editable="true"/>',
-	'<Column Header="Status" Width="100"/>',
-	'<Column Header="Progress" Width="110" Kind="Progress"/>',
-	'<Column Header="Estimate (h)" Width="100" Align="Right" Editable="true"/>',
-	'<Column Header="Due" Width="100"/>',
-	'<Column Header="Notes" Width="260" Fill="1" Editable="true"/>',
+	'<Column Header="Task" Width="170" Editable="true" Sortable="false"/>',
+	'<Column Header="Done" Width="56" Kind="Check" Sortable="false"/>',
+	'<Column Header="Owner" Width="130" Editable="true" Sortable="false"/>',
+	'<Column Header="Status" Width="100" Sortable="false"/>',
+	'<Column Header="Progress" Width="110" Kind="Progress" Sortable="false"/>',
+	'<Column Header="Estimate (h)" Width="100" Align="Right" Editable="true" Sortable="false"/>',
+	'<Column Header="Due" Width="100" Sortable="false"/>',
+	'<Column Header="Notes" Width="260" Fill="1" Editable="true" Sortable="false"/>',
 ].join("");
 
 /**
