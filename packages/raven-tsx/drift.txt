@@ -52,8 +52,8 @@ ae0e9289adb4ab0f8063f2f52f1928192b7912e2 1092a82 examples/music/ui/player.xml
 e93c83b24bcf862455db91073d4e8a6f3d7e1894 1092a82 examples/music/ui/settings.xml
 6a402aaba86de24c23e9a02545eb0a35c04e234b 1092a82 examples/music/ui/sidebar.xml
 754256e61c597c36daf55ac4cc1ac23685561537 1092a82 examples/music/ui/widgets.xml
-b6d1d878a8760b3914c813b83f3804a87de8167b 899a268 examples/notepad/main.c
-f4beaeb6d7dcd95deb3e46f867109e37308fe95e 1092a82 examples/notepad/notepad.xml
+97aed55cd4dcf5e6a2431f1954dfef66a3df6dd6 fc37a06 examples/notepad/main.c
+ea0571d79c9cf2a651bfeb61285e63b36de69dbf fc37a06 examples/notepad/notepad.xml
 79984e06d2608446386a89e018a8eb82fa0ffb9f 899a268 examples/overlay/main.c
 8fe7d8d2ab3f1da2227148e8718f4fe8c31cd9e9 1092a82 examples/overlay/overlay.xml
 dfcaafd7bd928495f94588c683554d6c62aac4ef 7ab270d examples/pdf/main.c
@@ -77,8 +77,8 @@ edbb92b936f23e0b51a8888a20a9d5d7d66f6757 1092a82 examples/viewport_vulkan/shader
 a451a36a30b7483d660ea5c83b95065c6f21b45b 899a268 examples/web/index.html
 2f56ab63ecb550d417cd69332974cdab34b99476 899a268 examples/web/main.c
 aa0367d15ac609312fd94b13106c38e98eb6d09e fc37a06 examples/web/shell.html
-e330d48ad868c9383c6445ef2f977867c65bb886 899a268 examples/workspace/main.c
-938a9d6747ee834595e4defd2a10acb70cf6f00c 1092a82 examples/workspace/workspace.xml
+ca3bbc100d35ec202ff32e450d1101d75646945d fc37a06 examples/workspace/main.c
+516468e17b0aaaae9f75cb65005f395b91b4ca2c fc37a06 examples/workspace/workspace.xml
 6c9b882eeb005643ca156e73a187c44088d71aa8 ede33eb src/widget/actions.c
 27dcadbf170999b110d0c80d276c701a1ad27dd7 fc37a06 src/widget/anim.c
 ce01d85e7df0d75d6e2ac72d7286d829496e531f 1092a82 src/widget/direction.c

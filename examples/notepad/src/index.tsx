@@ -7,6 +7,10 @@
  *   languages         the list of the library, chosen from the name of the file, plus INI
  *   completion        a callback adds its own proposals to those of the editor
  *   markers           the lines that say TODO or FIXME are underlined
+ *   find and replace  the find bar of the editor (Ctrl+F, Ctrl+H), also in the Edit menu
+ *   several cursors   Alt+click, Ctrl+D, Ctrl+Shift+L (also in the Edit menu)
+ *   folding           markers beside the line numbers, Ctrl+Shift+[ and ], fold all /
+ *                     unfold all in the View menu
  *   file dialogs      the ones of the system
  *   message box       "discard the changes?" before losing them
  *   drag and drop     a file dropped on the window is opened
@@ -223,6 +227,12 @@ function App(): ReactNode {
 		redo: () => edit(raven.Rtext_editor_redo),
 		propose: () => edit(raven.Rtext_editor_show_completions),
 		selectAll: () => edit(raven.Rtext_editor_select_all),
+		find: () => edit((id) => raven.Rtext_editor_show_find(id, raven.R_FALSE)),
+		replace: () => edit((id) => raven.Rtext_editor_show_find(id, raven.R_TRUE)),
+		nextOccurrence: () => edit(raven.Rtext_editor_add_next_occurrence),
+		allOccurrences: () => edit(raven.Rtext_editor_select_all_occurrences),
+		foldAll: () => edit(raven.Rtext_editor_fold_all),
+		unfoldAll: () => edit(raven.Rtext_editor_unfold_all),
 		toggleLineNumbers: () => setLineNumbers(!lineNumbers),
 		toggleWrap: () => setWrap(!wrap),
 	};
