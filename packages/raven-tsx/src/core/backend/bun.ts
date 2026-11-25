@@ -67,3 +67,11 @@ export function addressOf(userData: Pointer | NodeJS.TypedArray | null): Pointer
 export function addressOfView(view: Uint8Array): Pointer {
 	return ptr(view);
 }
+
+/**
+ * A function of C a library outside the binding calls (`raven_web.h`): its address, and it lives
+ * for ever. On Bun a JSCallback, as `nativeCallback` makes; `path` is the library, for Node.js.
+ */
+export function foreignCallback(_path: string, args: readonly NativeArg[], returns: "void" | "i32", run: (...values: NativeValue[]) => NativeResult): Pointer {
+	return nativeCallback(args, returns, run);
+}

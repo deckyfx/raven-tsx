@@ -150,7 +150,7 @@ Solid compiles its TSX itself: the register of the package does it under Node.js
 
 The files are those of [Solid](#solid) on Bun, unchanged.
 
-For TypeScript the package has declarations of its own under Node.js (`"moduleResolution": "NodeNext"`), which need no types of Bun; resolved as a bundler (tsx, esbuild, Vite), the sources are the types, with `@types/bun`. What is not there yet: `WebView`, as Raven's Node.js binding has no `raven_web.h` yet. It says so when asked.
+For TypeScript the package has declarations of its own under Node.js (`"moduleResolution": "NodeNext"`), which need no types of Bun; resolved as a bundler (tsx, esbuild, Vite), the sources are the types, with `@types/bun`. `WebView` works on Node.js 26 too, through `node:ffi`, as Raven's Node.js binding has no `raven_web.h`: `node:ffi` is experimental there, and says so once on stderr (with the permission model, it needs `--allow-ffi`). On an older Node.js, `registerWebView` and `webFunctions()` throw a `RavenError` that says so. `SystemWebView`, the web engine of the system, is in the binding, and needs nothing more.
 
 ## How props work
 
@@ -327,7 +327,9 @@ Children added with `Rwidget_add_child` to a parent React also fills stay in the
 
 Web pages need `registerWebView` once, as the `setup` of `runApp`, which runs before the first render. They are apart from the binding, as a library can be built without them, and `webFunctions()` gives the functions of `raven_web.h`.
 
-A `WebView` drives a browser of the Chromium family installed on the machine (Chrome, Chromium, Edge...), hidden, and shows its picture: there is none in the package. So show something else when there is no browser (`Rweb_is_available()` is 0), and when the library has no web pages: built with `-DRAVEN_BUILD_WEB=OFF`, `registerWebView` and `webFunctions()` throw a `RavenError`.
+Their functions take a text as a `Buffer` that ends with a zero, and a callback as the address `webCallback` makes, which lives for ever: `webCallback("message", (view, text) => ...)` for `Rweb_view_set_message_callback`, `"event"` for `Rweb_view_set_event_callback`, `"result"` for `Rweb_view_run_javascript`. It runs as a prop does, and is the same on Bun and on Node.js.
+
+A `WebView` drives a browser of the Chromium family installed on the machine (Chrome, Chromium, Edge...), hidden, and shows its picture: there is none in the package. A `SystemWebView` shows the page with the web engine of the system instead, over the widget, where Raven has one (WKWebView on macOS and iOS; elsewhere it shows a message), and needs no `registerWebView`: its props are `Url`, `Source`, `Html` and `BaseUrl`, and its events `OnMessage` and `OnPageEvent`. So show something else when there is no browser (`Rweb_is_available()` is 0), and when the library has no web pages: built with `-DRAVEN_BUILD_WEB=OFF`, `registerWebView` and `webFunctions()` throw a `RavenError`.
 
 ```tsx
 /** Whether web pages can be shown, known once `setup` ran. */

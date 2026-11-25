@@ -7,7 +7,7 @@ import { createContext, createRef, useContext, useLayoutEffect, useRef, useState
 import * as r from "../../core/raven";
 import { eventStats, nextFrame } from "../../core/events";
 import {
-	BlockEditor, Button, Carousel, Chart, ColorPicker, ComboBox, createPortal, createWindow, Custom, DiffView, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, SystemWebView, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, usePermission, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
+	BlockEditor, Button, Carousel, Chart, ColorPicker, ComboBox, createPortal, createWindow, Custom, DiffView, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, SystemWebView, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, usePermission, VBox, Viewport, webCallback, webFunctions, WebView, Window, WrapBox,
 	type WidgetInstance, type WindowInstance,
 } from "../../react/index";
 
@@ -1083,6 +1083,17 @@ test("the functions of raven_web come from the library, and WebView is a tag onc
 	webFunctions().Rweb_set_browser_path(null);
 	expect(webFunctions().Rweb_view_is_valid(page.current?.widget ?? r.R_INVALID_ID)).toBe(1);
 	expect(webFunctions().Rweb_view_get_zoom(page.current?.widget ?? r.R_INVALID_ID)).toBeCloseTo(1.5, 5);
+	// (the callbacks of raven_web, made the same way on Bun and on Node.js)
+	const view = page.current?.widget ?? r.R_INVALID_ID;
+	const answers: Array<readonly [number, string | null, string | null]> = [];
+	webFunctions().Rweb_view_set_message_callback(view, webCallback("message", () => {}), null);
+	webFunctions().Rweb_view_set_event_callback(view, webCallback("event", () => {}), null);
+	webFunctions().Rweb_view_run_javascript(view, Buffer.from("1 + 1\0"), webCallback("result", (from, result, error) => void answers.push([from, result, error])), null);
+	await settle(50);
+	// (no browser to run it in: the answer says why)
+	expect(answers).toEqual([[view, null, expect.stringContaining("was not found")]]);
+	webFunctions().Rweb_view_set_message_callback(view, null, null);
+	webFunctions().Rweb_view_set_event_callback(view, null, null);
 });
 
 /** Never called: what the compiler must refuse. */

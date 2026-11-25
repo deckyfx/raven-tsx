@@ -28,7 +28,7 @@ export type { WidgetInstance } from "./widget-instance";
 export type { WindowInstance } from "./window-instance";
 /** All of Raven's C API, for what props do not cover: painting, for one. */
 export * as raven from "./raven";
-export { registerWebView, webFunctions, type WebViewProps } from "./web";
+export { registerWebView, webCallback, webFunctions, type WebCallbacks, type WebViewProps } from "./web";
 export {
 	defineTheme, loadTheme, themeXml,
 	type GlassProperty, type LookName, type PartProperties, type PartShape, type SyntaxToken, type ThemeColor, type ThemeColors,
