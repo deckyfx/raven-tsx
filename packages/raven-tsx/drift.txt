@@ -67,6 +67,9 @@ e93c83b24bcf862455db91073d4e8a6f3d7e1894 1092a82 examples/music/ui/settings.xml
 754256e61c597c36daf55ac4cc1ac23685561537 1092a82 examples/music/ui/widgets.xml
 97aed55cd4dcf5e6a2431f1954dfef66a3df6dd6 fc37a06 examples/notepad/main.c
 ea0571d79c9cf2a651bfeb61285e63b36de69dbf fc37a06 examples/notepad/notepad.xml
+59a9a559986e169dd1d45ea6753fef855d747b32 fc37a06 examples/notifications/chat.svg
+4870dd16c0cb17a908912ca089aecf3d7ecfb7e6 fc37a06 examples/notifications/main.c
+00df990d5f54e3ee92dc97fdc6c627170f68a46a fc37a06 examples/notifications/notifications.xml
 79984e06d2608446386a89e018a8eb82fa0ffb9f 899a268 examples/overlay/main.c
 8fe7d8d2ab3f1da2227148e8718f4fe8c31cd9e9 1092a82 examples/overlay/overlay.xml
 dfcaafd7bd928495f94588c683554d6c62aac4ef 7ab270d examples/pdf/main.c
@@ -82,6 +85,11 @@ bd2edc06f94390a79a140c03a9182119ac3f41da 899a268 examples/themes/main.c
 261d854e35f896b1e48f3f62d0b15632926aff8d 1092a82 examples/themes/paper.xml
 e8f6e090f2030b4bc649df82a0ac1eb7693be873 1092a82 examples/themes/themes.xml
 2cdbf13649b8e8a954adf3c7c4d52d46eb9940c6 1092a82 examples/themes/tweaks.xml
+8cc3de395db80a8baf06a392e65451b2a7393492 fc37a06 examples/transfer/main.c
+f6e4efff5f3055039910513cb7d8d4ed706365d2 fc37a06 examples/transfer/transfer.xml
+3610c0fabac6aaab55ee8895861638658d3f8971 fc37a06 examples/ui_test/goldens/login.macos-metal.png
+e78c78252898e0c810af189465cabf7dca30c655 fc37a06 examples/ui_test/login.xml
+82514d280298a1898ae287a391fac52b0daddc78 fc37a06 examples/ui_test/main.c
 286a7348e59f3c1f529b13110e02ca5ad22abe18 1092a82 examples/viewport_opengl/main.c
 8991749f2b6dfce7cfa1620069e20dad492d4258 c34466d examples/viewport_vulkan/main.c
 7dd5a9656d9e08ed60255a4bbb7fb3607860a196 1092a82 examples/viewport_vulkan/shaders/triangle.frag

@@ -23,7 +23,7 @@ The package and its documentation are in [packages/raven-tsx](packages/raven-tsx
 
 ## Examples
 
-The C examples of Raven are ported to TSX in [examples](examples), with the same windows and the same behaviour (`viewport_vulkan` in part: JavaScript has no reasonable way to record Vulkan commands). They are the best place to see how a piece of Raven is written in React.
+The C examples of Raven are ported to TSX in [examples](examples), with the same windows and the same behaviour (`viewport_vulkan` in part: JavaScript has no reasonable way to record Vulkan commands). Not yet: `transfer` (dragging pictures out of the window, images on the clipboard), and `mobile`, as neither Bun nor Node.js runs on a phone. They are the best place to see how a piece of Raven is written in React.
 
 | | |
 |---|---|
@@ -55,6 +55,8 @@ The C examples of Raven are ported to TSX in [examples](examples), with the same
 | [device](examples/device) | The services of the device: permissions as state, the camera, the photo and file pickers, a save, the share sheet, haptics, the clipboard; `bun run smoke` plays it headless ([screenshot](docs/screenshots/device.png)) |
 | [diff_view](examples/diff_view) | Two versions of a file compared side by side or in one column, from change to change, with a note on a line ([screenshot](docs/screenshots/diff_view.png)) |
 | [web_view](examples/web_view) | A page shown by the web engine of the system (WKWebView on macOS), talking to the application both ways |
+| [notifications](examples/notifications) | Notifications of the system with a tag, buttons and an icon, and what the user did with them; in a toast where the system shows none ([screenshot](docs/screenshots/notifications.png)) |
+| [ui_test](examples/ui_test) | A test of an interface with `bun test`: a form driven by the names of its widgets, checked as text and against Raven's own golden image, to the pixel |
 | [map](examples/map) | A map whose tiles the application draws on worker threads, with markers and flights between places ([screenshot](docs/screenshots/map.png)) |
 | [browser](examples/browser), [editor](examples/editor), [effects](examples/effects), [music](examples/music), [notepad](examples/notepad), [studio](examples/studio), [themes](examples/themes), [workspace](examples/workspace) | Shown above |
 

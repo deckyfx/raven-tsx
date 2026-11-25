@@ -21,7 +21,7 @@ await runApp(<App />, { Title: "Hello", Width: 480, Height: 240 });
 
 ![The studio example: a node graph and a timeline, in the Blueprint look](../../docs/screenshots/studio.png)
 
-Every C example of Raven has a TSX port in [examples](../../examples), with screenshots in the [README of the repository](../../README.md).
+The C examples of Raven have a TSX port in [examples](../../examples), but for `transfer` and `mobile`, with screenshots in the [README of the repository](../../README.md).
 
 ## Install
 
