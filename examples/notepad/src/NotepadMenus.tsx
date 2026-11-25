@@ -14,6 +14,12 @@ export interface MenuActions {
 	readonly redo: () => void;
 	readonly propose: () => void;
 	readonly selectAll: () => void;
+	readonly find: () => void;
+	readonly replace: () => void;
+	readonly nextOccurrence: () => void;
+	readonly allOccurrences: () => void;
+	readonly foldAll: () => void;
+	readonly unfoldAll: () => void;
 	readonly toggleLineNumbers: () => void;
 	readonly toggleWrap: () => void;
 }
@@ -56,10 +62,18 @@ export function NotepadMenus({ actions, state }: { readonly actions: MenuActions
 				<MenuSeparator />
 				<MenuItem Text="Propose words" OnClicked={actions.propose} />
 				<MenuItem Text="Select all" OnClicked={actions.selectAll} />
+				<MenuSeparator />
+				<MenuItem Text="Find..." Shortcut="Ctrl+F" OnClicked={actions.find} />
+				<MenuItem Text="Replace..." Shortcut="Ctrl+H" OnClicked={actions.replace} />
+				<MenuSeparator />
+				<MenuItem Text="Add next occurrence" Shortcut="Ctrl+D" OnClicked={actions.nextOccurrence} />
+				<MenuItem Text="Select all occurrences" Shortcut="Ctrl+Shift+L" OnClicked={actions.allOccurrences} />
 			</Menu>
 			<Menu Title="View">
 				<MenuItem Text="Line numbers" Checkable Checked={state.lineNumbers} OnClicked={actions.toggleLineNumbers} />
 				<MenuItem Text="Word wrap" Checkable Checked={state.wrap} OnClicked={actions.toggleWrap} />
+				<MenuItem Text="Fold all" OnClicked={actions.foldAll} />
+				<MenuItem Text="Unfold all" OnClicked={actions.unfoldAll} />
 				<MenuSeparator />
 				{THEMES.map(({ text, theme }) => (
 					<MenuItem key={text} Text={text} OnClicked={() => raven.Rtheme_apply(theme)} />

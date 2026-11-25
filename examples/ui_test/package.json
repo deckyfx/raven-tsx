@@ -1,0 +1,21 @@
+{
+  "name": "example-ui-test",
+  "description": "A test of an interface, driven by the names of its widgets and compared with a golden image: Raven's ui_test example in TSX",
+  "module": "src/index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.tsx",
+    "test": "bun test",
+    "typecheck": "bun check"
+  },
+  "dependencies": {
+    "@decky.fx/raven-tsx": "workspace:*",
+    "react": "^19.3.0",
+    "react-reconciler": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19"
+  }
+}

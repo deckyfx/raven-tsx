@@ -63,7 +63,9 @@ Its first step is in `src/core`: move the direct uses of `bun:ffi` (`events.ts`,
 
 **Then, for 0.3.0:** declarations of their own for Node.js (`dist/types`, resolved under "NodeNext" with no types of Bun), Solid on Node.js (`@decky.fx/raven-tsx/solid/register`: the Babel of the plugin, Node.js stripping the types, `solid-js` with the condition "browser"), and Windows (the addon built by `packages/raven-tsx/addon` against `node.lib` from nodejs.org, as Raven's CMake leaves it out there).
 
-Still to do: `WebView` (Raven's Node.js binding has no `raven_web.h`).
+**Then, for 0.4.1: `WebView`.** Raven's Node.js binding has no `raven_web.h`, and its addon calls only what it was generated for, so the Node.js backend opens `raven_web.h` with `node:ffi`, the foreign functions of Node.js 26 (experimental there: it says so once on stderr; there by default from 26.9, behind `--experimental-ffi` from 26.1 to 26.8; and it needs `--allow-ffi` under the permission model). Its functions are called as bun:ffi calls them, and `webCallback` makes the callbacks of `raven_web.h` on both runtimes. On a Node.js without `node:ffi` (24, which CI uses), `registerWebView` and `webFunctions()` throw a `RavenError` that says so, which `check:consumer` accepts. What would make it work there too is upstream: `raven_web.h` in `bindings/node` (or an addon of raven-tsx's own, which 0.3.0 gave up for Windows). `SystemWebView`, the web engine of the system, is in the binding and needs nothing of this.
+
+Still to do: a frame callback of C given by its address (`Rset_frame_callback` with a pointer) needs Bun.
 
 ## Phase 4: Solid adapter
 
@@ -127,6 +129,12 @@ If one of these fails, stop and write down why. React stays the only adapter.
 - **Moving nodes.** Check that Solid moves a node by inserting it again, without `removeNode`. Otherwise `removeNode` cannot mean "dispose", and dispose has to wait for the flush.
 - **Prop order.** Check whether `setProperty` can run after `insertNode` for a static prop. If it can, `Markup` could arrive after the node is made.
 
+## Raven after 0.3.0, and the device (0.4.1)
+
+0.4.1 pins Raven `fc37a067` (0.3.0 and 132 commits, no tag yet), as the pin did before 0.3.0: a full commit. Its new widgets are components, `DiffView` and `SystemWebView`, and its new callbacks are props (`OnCellEdited`, `OnTextChanged`, `OnLineClicked`, `OnMessage`, `OnPageEvent`, `OnFinished`) or have a reason in the coverage test not to be (the notifications' callback, the drag out of a TileView). Its new examples are ported (`animated_images`, `diff_view`, `icons`, `notifications`, `ui_test`, `web_view`), but for `transfer`, and the scripts of `examples/headless` drive `hello` and `music` (`bun run smoke`).
+
+The services of the device (`raven_device.h`) are in the core, as promises of typed answers, on both runtimes: one native callback per kind of answer serves every request, told apart by its user data. React has `usePermission`, Solid `createPermission`. On a desktop they are answered with Raven's file dialogs or `"unsupported"`; on a phone they would show the screens of the system, but neither Bun nor Node.js runs there.
+
 ## Not planned
 
 - **Svelte.** Svelte components are `.svelte` files compiled by Svelte, not TSX, so it does not fit "TSX, any framework". Its custom-renderer API is also not released: the Svelte docs say it is "not yet available", and the work is tracked in sveltejs/svelte#15470.
@@ -138,7 +146,7 @@ If one of these fails, stop and write down why. React stays the only adapter.
 |---|---|---|
 | 1. Rename | nothing | done |
 | 2. Core and React separated | nothing | done |
-| 3. Node.js backend | an upstream binding | React and Solid on Linux, macOS and Windows, with types; WebView to do |
+| 3. Node.js backend | an upstream binding | done: React and Solid on Linux, macOS and Windows, with types; WebView through `node:ffi` (Node.js 26) |
 | 4. Solid adapter | nothing | done |
 
 ## Decisions for the user

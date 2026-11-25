@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { getPermission, requestPermission, watchPermission, type Permission, type PermissionStatus } from "../core/device";
 import type * as r from "../core/raven";
 import type { FrameHandler } from "../core/frame";
 import { onAction, onFrame, onShortcut } from "../core/subscriptions";
@@ -48,4 +49,29 @@ export function useShortcut(window: RefObject<WindowInstance | null>, keys: stri
 export function useFrame(handler: FrameHandler): void {
 	const latest = useLatest(handler);
 	useEffect(() => onFrame((delta) => latest.current(delta)), []);
+}
+
+/**
+ * The status of a permission, as state, and what asks for it: `const [camera, askCamera] = usePermission("camera")`.
+ * It follows what the user answers, and what they change in the Settings of the system while the
+ * application is away. Asking gives the answer too, and needs Raven running (an effect, a handler).
+ */
+export function usePermission(name: Permission): readonly [PermissionStatus, () => Promise<PermissionStatus>] {
+	const [status, setStatus] = useState<PermissionStatus>(() => getPermission(name));
+	// (each watch of a name is a subscription: an answer asked during an earlier one, even of the same
+	// name, is still given to whoever asked, but does not set the status; the watch reads it anyway)
+	const subscription = useRef(0);
+	useEffect(() => {
+		subscription.current++;
+		return watchPermission(name, setStatus);
+	}, [name]);
+	const ask = useCallback(async (): Promise<PermissionStatus> => {
+		const asked = subscription.current;
+		const answer = await requestPermission(name);
+		if (subscription.current === asked) {
+			setStatus(answer);
+		}
+		return answer;
+	}, [name]);
+	return [status, ask] as const;
 }

@@ -8,7 +8,7 @@ import { eventStats } from "../../core/events";
 import { resolveProps, type RavenProps } from "../../core/props";
 import { SolidNode } from "../../solid/node";
 import {
-	Border, Button, Checkbox, createAction, createFrame, createShortcut, createWindow, HBox, Island, Label, Menu, MenuBar, MenuItem, Portal, RavenRoot, Separator, TextInput, VBox, Window,
+	Border, Button, Checkbox, createAction, createFrame, createPermission, createShortcut, createWindow, HBox, Island, Label, Menu, MenuBar, MenuItem, Portal, RavenRoot, Separator, TextInput, VBox, Window,
 	type JSX, type WidgetInstance, type WindowInstance,
 } from "../../solid/index";
 
@@ -1418,4 +1418,19 @@ test("text at the top of a tree, in a root or a portal, has no widget and is ref
 	const windows = new RavenRoot();
 	expect(() => windows.render(() => "loose")).toThrow('text must be in a widget: "loose"');
 	windows.unmount();
+});
+
+test("createPermission gives the status as a signal, and the answer of a request", async () => {
+	const held: { ask?: () => Promise<string> } = {};
+	function Camera(): JSX.Element {
+		const [status, request] = createPermission("camera");
+		held.ask = request;
+		return <Label Name="status">{status()}</Label>;
+	}
+	await mount(() => <VBox><Camera /></VBox>);
+	expect(text("status")).toBe("unsupported");
+	const answer = held.ask?.();
+	await settle();
+	expect(await answer).toBe("unsupported");
+	expect(eventStats().handlers).toBe(0);
 });

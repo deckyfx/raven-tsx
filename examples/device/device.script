@@ -1,0 +1,14 @@
+# Plays the user of the example, headless, on a desktop: what is not there says so, at a later frame.
+#     bun run smoke
+click "text:Take a photo"
+wait 5
+expect status text "camera: not there on this device"
+click "text:Share"
+wait 5
+expect status text "share: not there on this device"
+click "text:success"
+expect status text "haptic: none on this device"
+click "text:Copy"
+click "text:Paste"
+wait 2
+expect clipboard contains "Copied from the device example"

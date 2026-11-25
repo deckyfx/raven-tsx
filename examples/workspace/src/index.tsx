@@ -10,6 +10,9 @@
  *                  it contains
  *   Island         tells what just happened, then folds back
  *   HeaderBar      without background: the bar is the top of the window
+ *   Table          cells edited in place, checked by the application (OnCellEdited), a frozen
+ *                  first column, several selected rows, a check box and a progress bar column
+ *   ComboBox       searchable: typing filters the people of the list
  */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
@@ -18,6 +21,7 @@ import {
 	ComboBox,
 	DockArea,
 	FileBrowser,
+	HBox,
 	HeaderBar,
 	Island,
 	Label,
@@ -25,6 +29,7 @@ import {
 	raven,
 	runApp,
 	Separator,
+	Table,
 	TextEditor,
 	VBox,
 	Window,
@@ -68,6 +73,124 @@ interface EditorPanelState {
 /** The last part of a path. */
 function fileName(path: string): string {
 	return path.split(/[\\/]/).pop() ?? path;
+}
+
+/** A task of the Tasks panel: its cells, in the order of the columns. */
+type Task = readonly [task: string, done: string, owner: string, status: string, progress: string, estimate: string, due: string, notes: string];
+
+const TASKS: readonly Task[] = [
+	["Dock layout", "1", "Zoë Martin", "Done", "1", "6", "2026-11-02", "Saved with the window"],
+	["Table editing", "0", "Mazé Costa", "Review", "0.9", "12", "2026-11-20", "Tab goes to the next cell"],
+	["Frozen columns", "0", "João Silva", "Review", "0.8", "5", "2026-11-20", "The task stays at the left"],
+	["Searchable combo", "0", "Ana Müller", "In progress", "55%", "8", "2026-11-24", "Accents do not matter"],
+	["Several rows", "0", "Søren Holm", "In progress", "40%", "6", "2026-11-28", "Shift+click, Ctrl/Cmd+click, Space"],
+	["Glass popups", "0", "Björn Ångström", "To do", "0.1", "3", "2026-12-01", ""],
+	["Screen readers", "0", "Chloé Dubois", "To do", "0", "4", "2026-12-05", "The editor is a text field"],
+	["Release notes", "0", "Renée Fournier", "To do", "0", "2", "2026-12-10", ""],
+];
+
+const PEOPLE = ["Zoë Martin", "Mazé Costa", "João Silva", "Ana Müller", "Björn Ångström", "Chloé Dubois", "Łukasz Nowak", "Renée Fournier", "Søren Holm", "Zoltán Kovács"];
+
+/** The columns of the tasks; none sorts, as the rows keep their order (a sort arrow would say otherwise). */
+const TASK_COLUMNS = [
+	'<Column Header="Task" Width="170" Editable="true" Sortable="false"/>',
+	'<Column Header="Done" Width="56" Kind="Check" Sortable="false"/>',
+	'<Column Header="Owner" Width="130" Editable="true" Sortable="false"/>',
+	'<Column Header="Status" Width="100" Sortable="false"/>',
+	'<Column Header="Progress" Width="110" Kind="Progress" Sortable="false"/>',
+	'<Column Header="Estimate (h)" Width="100" Align="Right" Editable="true" Sortable="false"/>',
+	'<Column Header="Due" Width="100" Sortable="false"/>',
+	'<Column Header="Notes" Width="260" Fill="1" Editable="true" Sortable="false"/>',
+].join("");
+
+/**
+ * Tasks: a table edited in place, whose rows are state. What the user types comes to
+ * `OnCellEdited`, which keeps it in the state or refuses it (an estimate must be a number of
+ * hours: false keeps the editor open on the text).
+ */
+function TasksPanel({ say }: { say: (title: string, detail: string) => void }): ReactNode {
+	const table = useRef<WidgetInstance>(null);
+	const [tasks, setTasks] = useState<readonly Task[]>(TASKS);
+
+	const setCells = (row: number, cells: Readonly<Record<number, string>>): void => {
+		setTasks((list) => list.map((task, index) => (index === row ? (task.map((cell, column) => cells[column] ?? cell) as unknown as Task) : task)));
+	};
+
+	const edited = (row: number, column: number, text: string): boolean => {
+		const task = tasks[row];
+		if (!task) {
+			return false;
+		}
+		if (column === 1) {
+			// (the Done check box: the task is finished, or opened again)
+			const done = text.startsWith("1");
+			setCells(row, done ? { 1: "1", 3: "Done", 4: "1" } : { 1: "0", 3: "In progress" });
+			say(done ? "Task done" : "Task opened again", task[0]);
+			return true;
+		}
+		if (column === 5) {
+			const hours = Number(text);
+			if (text.trim() === "" || !Number.isFinite(hours) || hours < 0) {
+				say("Not a number of hours", text);
+				return false;
+			}
+			// (what is kept is written by the application: "4.5" for "4.50")
+			setCells(row, { 5: String(hours) });
+		} else {
+			setCells(row, { [column]: text });
+		}
+		say("Task edited", `${task[0]}, ${raven.Rtable_get_column_header(table.current?.widget ?? raven.R_INVALID_ID, column) ?? ""}: ${text}`);
+		return true;
+	};
+
+	/** Every selected task goes to the person chosen: the selection is read range by range. */
+	const assign = (person: number): void => {
+		const name = PEOPLE[person];
+		const widget = table.current?.widget;
+		if (name === undefined || widget === undefined) {
+			return;
+		}
+		const rows: number[] = [];
+		for (let range = 0; range < raven.Rtable_get_selection_range_count(widget); range++) {
+			const [, first, last] = raven.Rtable_get_selection_range(widget, range);
+			for (let row = first; row <= last; row++) {
+				rows.push(row);
+			}
+		}
+		if (rows.length === 0) {
+			return;
+		}
+		setTasks((list) => list.map((task, index) => (rows.includes(index) ? (task.map((cell, column) => (column === 2 ? name : cell)) as unknown as Task) : task)));
+		say("Assigned", `${rows.length} task${rows.length > 1 ? "s" : ""} to ${name}`);
+	};
+
+	return (
+		<VBox Name="tasks" Spacing={8} Slot={{ Title: "Tasks", Dock: "Tab", DockTo: "welcome", Padding: 12 }}>
+			<HBox Spacing={8}>
+				<Label Text="Assign the selected tasks to" Slot={{ VAlign: "Center" }} />
+				{/* (a menu: it goes back to no one after each choice, so the same person chosen again for other tasks assigns them too) */}
+				<ComboBox Name="assignee" Searchable Width={200} Items={PEOPLE} Selected={-1} OnChanged={assign} />
+			</HBox>
+			<Table
+				ref={table}
+				Name="tasks.table"
+				Markup={TASK_COLUMNS}
+				RowCount={tasks.length}
+				CellText={(row, column) => tasks[row]?.[column] ?? ""}
+				OnCellEdited={edited}
+				FrozenColumns={1}
+				GridLines
+				Striped
+				SelectionMode="Multiple"
+				Slot={{ Fill: 1 }}
+			/>
+			<Label
+				Opacity={0.6}
+				Wrap
+				Text="Double click a cell of Task, Owner, Estimate or Notes, or select a row and type. Enter keeps the text, Escape forgets it. An estimate must be a number. Click Done (or press Space on it) to check a task. Ctrl/Cmd+click and Shift+click select several tasks, which are all assigned at once."
+			/>
+		</VBox>
+	);
 }
 
 /**
@@ -323,6 +446,8 @@ function App(): ReactNode {
 
 				<DockArea ref={dock} Slot={{ Fill: 1 }}>
 					<TextEditor Name="welcome" Text={WELCOME} LineNumbers Language="C" Slot={{ Title: "Welcome" }} />
+
+					<TasksPanel say={say} />
 
 					<FileBrowser
 						ref={files}

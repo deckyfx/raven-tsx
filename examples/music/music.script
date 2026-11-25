@@ -1,0 +1,15 @@
+# Raven's examples/headless/music.script, for this port: widgets found by their names, as in the
+# original (collection.title, search.query), and by what they read. The songs of this library are
+# not those of the C one, so the search looks for one of its own.
+#
+#   bun run smoke
+
+click "text:Focus flow"
+expect collection.title text "Focus flow"
+
+click search.query
+type "Static"
+key Enter
+settle 1
+expect "text:Static Lanterns" shown
+mark searched

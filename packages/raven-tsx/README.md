@@ -21,7 +21,7 @@ await runApp(<App />, { Title: "Hello", Width: 480, Height: 240 });
 
 ![The studio example: a node graph and a timeline, in the Blueprint look](../../docs/screenshots/studio.png)
 
-Every C example of Raven has a TSX port in [examples](../../examples), with screenshots in the [README of the repository](../../README.md).
+The C examples of Raven have a TSX port in [examples](../../examples), but for `transfer` and `mobile`, with screenshots in the [README of the repository](../../README.md).
 
 ## Install
 
@@ -34,7 +34,7 @@ For Solid, see [Solid](#solid). The frameworks are optional peer dependencies: a
 | `@decky.fx/raven-tsx/react` | The components, `runApp`, the hooks and `registerTag`, for React, and everything of the core |
 | `@decky.fx/raven-tsx/solid` | The same for Solid, with `create...` functions in place of the hooks |
 | `@decky.fx/raven-tsx/solid/preload`, `/solid/plugin` | The Bun plugin that compiles TSX for Solid: to preload, or to give `Bun.build` |
-| `@decky.fx/raven-tsx` | The core, for code that is not a component: `defineTheme`, `loadTheme`, `raven`, and `onAction`, `onShortcut`, `onFrame`, which each return what stops them |
+| `@decky.fx/raven-tsx` | The core, for code that is not a component: `defineTheme`, `loadTheme`, `raven`, `onAction`, `onShortcut`, `onFrame`, which each return what stops them, and the [services of the device](#the-device) |
 
 ```json
 { "compilerOptions": { "jsx": "react-jsx", "types": ["bun", "react"] } }
@@ -150,7 +150,7 @@ Solid compiles its TSX itself: the register of the package does it under Node.js
 
 The files are those of [Solid](#solid) on Bun, unchanged.
 
-For TypeScript the package has declarations of its own under Node.js (`"moduleResolution": "NodeNext"`), which need no types of Bun; resolved as a bundler (tsx, esbuild, Vite), the sources are the types, with `@types/bun`. What is not there yet: `WebView`, as Raven's Node.js binding has no `raven_web.h` yet. It says so when asked.
+For TypeScript the package has declarations of its own under Node.js (`"moduleResolution": "NodeNext"`), which need no types of Bun; resolved as a bundler (tsx, esbuild, Vite), the sources are the types, with `@types/bun`. `WebView` works on Node.js 26 too, through `node:ffi`, as Raven's Node.js binding has no `raven_web.h`: `node:ffi` is experimental there, and says so once on stderr. From Node.js 26.9 it is there by default; 26.1 to 26.8 need `--experimental-ffi`. With the permission model, it also needs `--allow-ffi`. On an older Node.js, `registerWebView` and `webFunctions()` throw a `RavenError` that says so. `SystemWebView`, the web engine of the system, is in the binding, and needs nothing more.
 
 ## How props work
 
@@ -174,10 +174,12 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | `Checkbox`, `Expander` | `OnChanged` | `boolean` |
 | `Slider`, `SpinBox` | `OnChanged` | `number` |
 | `ComboBox`, `TabView` | `OnChanged` | index |
+| `ComboBox` | `OnTextChanged` | the text typed in an `Editable` or `Searchable` one |
 | `ListView`, `TileView` | `OnChanged`, `OnActivated` | index |
 | `TreeView` | `OnChanged`, `OnActivated` | handle of the item |
 | `Table` | `OnChanged`, `OnActivated` | row |
 | `Table` | `OnSort` | column, and whether it is descending |
+| `Table` | `OnCellEdited` | row, column and the text typed in a cell of an `Editable` column |
 | `DatePicker` | `OnChanged` | `"YYYY-MM-DD"` |
 | `TimePicker` | `OnChanged` | `"HH:MM:SS"` |
 | `Rating` | `OnChanged` | `number` |
@@ -194,6 +196,10 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | `TextEditor` | `OnZoom` | `number` |
 | `ColorPicker` | `OnChanged` | `"#RRGGBB"`, or `"#RRGGBBAA"` when it is not opaque |
 | `Label` | `OnLink` | the address of the link |
+| `DiffView` | `OnLineClicked` | `"Left"` or `"Right"`, the line on that side from 1, and whether its number was clicked |
+| `SystemWebView` | `OnMessage` | what the page sent with `window.raven.postMessage(value)` |
+| `SystemWebView` | `OnPageEvent` | `"Navigated"`, `"Title"`, `"Loading"`, `"Loaded"` or `"Failed"` |
+| `Image` | `OnFinished` | nothing: an animation stopped after its last play |
 | `MenuItem` | `OnClicked` | whether it is checked now |
 | `Island` | `OnChanged` | `boolean` |
 | `Viewport`, `<Window>` | `OnResize` | width, height |
@@ -208,13 +214,13 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | any widget, `<Window>` | `OnDrop` | an `RDropEvent` |
 | any widget | `OnEvent` | an `REvent`, before the widget sees it: the pointer over a `Custom`, for one |
 
-Some events ask: `OnClose` of a `TabView` (index, page) and of a `DockArea` (panel), `OnConnect` of a `NodeGraph` (two pins), and `OnEvent` and `OnDrop`, where true means taken. Return true to let the thing happen. A tab or a panel that stays can then go by taking its element out, which is the way to do it: when Raven closes a panel by itself, it deletes a widget React still has, which does no harm but leaves the element with a `.widget` that is no longer valid. `Documents` on a `TabView` gives its tabs a close button.
+Some events ask: `OnClose` of a `TabView` (index, page) and of a `DockArea` (panel), `OnConnect` of a `NodeGraph` (two pins), and `OnEvent` and `OnDrop`, where true means taken. Return true to let the thing happen. `OnCellEdited` of a `Table` is the other way round, as nothing is the usual answer: it keeps the text unless the function returns false, and then the editor stays open on it, after Enter or Tab, for the user to correct. A tab or a panel that stays can then go by taking its element out, which is the way to do it: when Raven closes a panel by itself, it deletes a widget React still has, which does no harm but leaves the element with a `.widget` that is no longer valid. `Documents` on a `TabView` gives its tabs a close button.
 
 Other events give nothing, and share the one action a widget has in Raven: give a widget one of them. `Timeline` and `NodeGraph` have an `OnChanged` of this kind, once per gesture.
 
-A `MapView` asks for its tiles as it is drawn, in `OnTile`: answer with `Rmap_view_set_tile` (pixels) or `Rmap_view_set_tile_failed`, at once or later, or give it `TilePath` to read them from files. Its view is the user's to move: `OnChanged` says where it went, and a new `Latitude`, `Longitude` or `Zoom` moves it, but the props are not put back after an event. A `Table` with `MultiSelect` keeps the rows the user selected in the same way; `Rtable_get_selection` reads them.
+A `MapView` asks for its tiles as it is drawn, in `OnTile`: answer with `Rmap_view_set_tile` (pixels) or `Rmap_view_set_tile_failed`, at once or later, or give it `TilePath` to read them from files. Its view is the user's to move: `OnChanged` says where it went, and a new `Latitude`, `Longitude` or `Zoom` moves it, but the props are not put back after an event. A `Table` with `MultiSelect` or `SelectionMode="Multiple"` keeps the rows the user selected in the same way; `Rtable_get_selection` reads them.
 
-Inputs are controlled, as in React DOM. With `Text={value}`, what the state says stays on screen if a handler refuses a change. An update made in an event is committed before the next event, as a click in React DOM. `ListView` and `ComboBox` keep their `Selected` when their `Items` change. A `|` in an item would split it, as `Items` is written that way in XML: for such items use `ItemText`. `FileBrowser`'s `Directory` and `Timeline`'s `Playing` are not held this way: the user changes them with no event that says so.
+Inputs are controlled, as in React DOM. With `Text={value}`, what the state says stays on screen if a handler refuses a change. An update made in an event is committed before the next event, as a click in React DOM. `ListView` and `ComboBox` keep their `Selected` when their `Items` change. A `|` in an item would split it, as `Items` is written that way in XML: for such items use `ItemText`. An editable `ComboBox` holds its `Text` as a `TextInput` does. `FileBrowser`'s `Directory`, `Timeline`'s `Playing` and `TextEditor`'s `Search` (typed in its find bar) are not held this way: the user changes them with no event that says so.
 
 ## Windows
 
@@ -321,7 +327,9 @@ Children added with `Rwidget_add_child` to a parent React also fills stay in the
 
 Web pages need `registerWebView` once, as the `setup` of `runApp`, which runs before the first render. They are apart from the binding, as a library can be built without them, and `webFunctions()` gives the functions of `raven_web.h`.
 
-A `WebView` drives a browser of the Chromium family installed on the machine (Chrome, Chromium, Edge...), hidden, and shows its picture: there is none in the package. So show something else when there is no browser (`Rweb_is_available()` is 0), and when the library has no web pages: built with `-DRAVEN_BUILD_WEB=OFF`, `registerWebView` and `webFunctions()` throw a `RavenError`.
+Their functions take a text as a `Buffer` that ends with a zero, and a callback as the address `webCallback` makes, which lives for ever: `webCallback("message", (view, text) => ...)` for `Rweb_view_set_message_callback`, `"event"` for `Rweb_view_set_event_callback`, `"result"` for `Rweb_view_run_javascript`. It runs as a prop does, and is the same on Bun and on Node.js.
+
+A `WebView` drives a browser of the Chromium family installed on the machine (Chrome, Chromium, Edge...), hidden, and shows its picture: there is none in the package. A `SystemWebView` shows the page with the web engine of the system instead, over the widget, where Raven has one (WKWebView on macOS and iOS; elsewhere it shows a message), and needs no `registerWebView`: its props are `Url`, `Source`, `Html` and `BaseUrl`, and its events `OnMessage` and `OnPageEvent`. So show something else when there is no browser (`Rweb_is_available()` is 0), and when the library has no web pages: built with `-DRAVEN_BUILD_WEB=OFF`, `registerWebView` and `webFunctions()` throw a `RavenError`.
 
 ```tsx
 /** Whether web pages can be shown, known once `setup` ran. */
@@ -438,6 +446,47 @@ useEffect(() => {
 
 An `Image` shows an SVG file like any other: `<Image Source="logo.svg" />`.
 
+## The device
+
+The services of the device are functions of the core, exported by each adapter too, with promises: permissions, the pickers and the camera of the system, the share sheet, haptics. On a phone they show a screen of the system while the application runs on. On a desktop the pickers are Raven's file dialogs, and the camera and the share sheet answer `"unsupported"`, as do the permissions, but for notifications.
+
+```tsx
+import { openFiles, requestPermission, saveFile, share, takePhoto } from "@decky.fx/raven-tsx/react";
+
+const { result, files } = await openFiles({ filters: [{ name: "Images", patterns: "*.png;*.jpg" }], multiple: true });
+if (result === "done") {
+	for (const file of files) console.log(file.path, file.name, file.size);
+}
+await saveFile(JSON.stringify(data), { fileName: "data.json", window: main.current });
+const status = await requestPermission("camera"); // "granted", "denied", "blocked", "unsupported"...
+```
+
+| Function | Answer |
+|---|---|
+| `requestPermission(name)` | the status, once the user answered: `"unsupported"`, `"not-asked"`, `"granted"`, `"limited"`, `"denied"` or `"blocked"` |
+| `openFiles(options)`, `pickPhotos(max)`, `takePhoto()` | `{ result, files }` |
+| `saveFile(data, options)`, `exportFile(path, options)`, `selectFolder(options)` | `{ result, files }`: the file saved, or the folder |
+| `share({ text, path, mimeType, title, anchor })` | `{ result, files: [] }` |
+
+`result` is `"done"`, `"cancelled"`, `"denied"` (a permission it needs was refused), `"unsupported"`, `"busy"` (another screen of the system is open: one at a time) or `"failed"`, and `files` holds something only when it is `"done"`: a `path` Raven and the file system can read (on iOS and Android a copy in the cache), the `name` the user saw, `mimeType`, `size`, and `width` and `height` of a photo. `options` of a picker are `window` (a handle or the ref of a `<Window>`), `title`, `directory`, `fileName`, `filters`, `defaultExtension` and `multiple`, each optional.
+
+Each answer comes once, at a later frame, never inside the call, and what awaits it runs as after a timer. A request needs Raven running, and throws a `RavenError` otherwise: one still open when Raven stops is never answered, as in C. Nothing is made for each request: one native callback serves them all.
+
+What answers at once is a plain function: `getPermission(name)` (the status, without asking), `openSettings()` (the page of the application in the Settings of the system), `isCameraAvailable()`, `isHapticSupported()`, `haptic("light" | "medium" | "heavy" | "selection" | "success" | "warning" | "error")`, `openUrl(url)` and `clipboardHasText()`, the last four with whether it happened. `watchPermission(name, handler)` calls the function with the status now and at each change, as when the user changed it in the Settings while the application was away (it reads it twice a second), and returns what stops it.
+
+`usePermission(name)` of React, and `createPermission(name)` of Solid, are that as state: the status, and the function that asks.
+
+```tsx
+function Camera(): ReactNode {
+	const [camera, askCamera] = usePermission("camera");
+	return camera === "granted" ? <Button OnClicked={() => void takePhoto().then(show)}>Take a photo</Button>
+		: camera === "blocked" ? <Button OnClicked={openSettings}>Allow the camera in Settings</Button>
+		: <Button OnClicked={() => void askCamera()}>Use the camera</Button>;
+}
+```
+
+They work on Bun and on Node.js alike. What a phone application declares for each (its manifest, its Info.plist) is listed in Raven's `include/raven/raven_device.h`.
+
 ## What to expect
 
 - Removing a prop makes the widget again, in its place, with the same children: Raven has no way to give an attribute its default back. What the widget held by itself (focus, typed text, scrolling) is lost. To avoid that, keep the prop and change its value.
@@ -471,6 +520,8 @@ Then, in `examples/helloworld`: `bun run dev`, or `bun run build`. Every other e
 | Where things stand, and what changed in Raven's API | `bun run raven:status [ref]` |
 | Check that everything agrees with the pin | `bun run raven:check` |
 | Move to another Raven, or to the latest | `bun run raven:update [ref]` |
+
+With a checkout that others build in too, `--raven-build <folder>` and `--node-build <folder>` (of `native:local` and `raven:update`) say where the library and the addon of Node.js are built, in place of its `build-shared` and `build-node`.
 
 `RAVEN_VERSION` says which Raven this is, a full commit or a tag, and nothing else does. `raven:update` is the way to change it: it moves the checkout, builds the libraries, packages one, and only then takes the binding, writes the pin and generates the components, since a newer library works with an older binding and the opposite stops every application at startup. It stops at the first step that fails, and can be run again.
 

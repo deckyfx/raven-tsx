@@ -103,10 +103,18 @@ interface ControlledValue {
 	 */
 	readonly unreported?: true | undefined;
 	/**
-	 * When the user's value is kept after an event, not put back to the prop, as the attributes of
-	 * the widget say: a Table that selects several rows, whose rows setting Selected would reduce to one.
+	 * When the user's value is kept after an event, not put back to the prop, as the widget is now: a
+	 * Table that selects several rows, whose rows setting Selected would reduce to one. Read from the
+	 * widget, not the props: of `MultiSelect` and `SelectionMode`, the one set last decides.
 	 */
-	readonly keptWhen?: ((attributes: ReadonlyMap<string, string>) => boolean) | undefined;
+	readonly keptWhen?: ((widget: r.Rid) => boolean) | undefined;
+	/**
+	 * Put back once the change is over, not after the event: C gives another event of the same change
+	 * right after it, whose handler may take the value. An editable ComboBox says OnChanged(-1), then
+	 * OnTextChanged, for one key: putting Text back between them would replace the text, and the caret
+	 * would go to its end.
+	 */
+	readonly deferred?: true | undefined;
 }
 
 /** The props whose function Raven calls as the widget is drawn: a new one needs the widget drawn again. */
@@ -136,17 +144,23 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	TextEditor: [
 		{ attribute: "Text", read: (widget) => r.Rtext_editor_get_text(widget) ?? "", same: sameText },
 		{ attribute: "Zoom", read: (widget) => numberText(r.Rtext_editor_get_zoom(widget)), unreported: true },
+		// (typed in the find bar, which says nothing of it)
+		{ attribute: "Search", read: (widget) => r.Rtext_editor_get_search(widget) ?? "", same: sameText, unreported: true },
 	],
 	Checkbox: [{ attribute: "Checked", read: (widget) => flagText(r.Rcheckbox_is_checked(widget)) }],
 	Slider: [{ attribute: "Value", read: (widget) => numberText(r.Rslider_get_value(widget)) }],
 	SpinBox: [{ attribute: "Value", read: (widget) => numberText(r.Rspin_box_get_value(widget)) }],
-	ComboBox: [{ attribute: "Selected", read: (widget) => numberText(r.Rcombo_box_get_selected(widget)) }],
+	ComboBox: [
+		{ attribute: "Selected", read: (widget) => numberText(r.Rcombo_box_get_selected(widget)) },
+		// (what is typed in an editable combo box, which OnTextChanged gives)
+		{ attribute: "Text", read: (widget) => r.Rcombo_box_get_text(widget) ?? "", same: sameText, deferred: true },
+	],
 	ListView: [{ attribute: "Selected", read: (widget) => numberText(r.Rlist_view_get_selected(widget)) }],
 	TabView: [{ attribute: "ActiveTab", read: (widget) => numberText(r.Rtab_view_get_active(widget)) }],
 	Expander: [{ attribute: "Expanded", read: (widget) => flagText(r.Rexpander_is_expanded(widget)) }],
 	Island: [{ attribute: "Expanded", read: (widget) => flagText(r.Risland_is_expanded(widget)) }],
 	Table: [
-		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)), keptWhen: (attributes) => attributes.get("MultiSelect") === "true" },
+		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)), keptWhen: (widget) => r.Rtable_get_selection_mode(widget) === r.R_TABLE_SELECTION_MULTIPLE },
 		{ attribute: "SortColumn", read: (widget) => numberText(r.Rtable_get_sort_column(widget)) },
 	],
 	Rating: [{ attribute: "Value", read: (widget) => numberText(r.Rrating_get_value(widget)) }],
@@ -708,7 +722,7 @@ export class WidgetInstance implements HostNode {
 		if (selected === undefined || !control) {
 			return;
 		}
-		const several = control.keptWhen?.(next.attributes) === true;
+		const several = control.keptWhen?.(this.id) === true;
 		if (previous?.attributes.get("Selected") !== selected) {
 			this.selectionTaken = false;
 		}
@@ -738,10 +752,22 @@ export class WidgetInstance implements HostNode {
 			if (data && this.resolved.handlers.has("OnChanged")) {
 				eventScope.ignoringEvents(() => data.restore(this.id, this.resolved.data));
 			}
-			for (const { attribute, unreported, keptWhen } of controlled ?? []) {
-				const wanted = this.resolved.attributes.get(attribute);
-				if (wanted !== undefined && !unreported && !keptWhen?.(this.resolved.attributes)) {
-					this.setAttribute(attribute, wanted);
+			for (const { attribute, unreported, keptWhen, deferred } of controlled ?? []) {
+				if (unreported || keptWhen?.(this.id)) {
+					continue;
+				}
+				const putBack = (): void => {
+					// (what the props say then: the next event of the change may have taken the value)
+					const wanted = this.resolved.attributes.get(attribute);
+					if (wanted !== undefined && this.state === "live" && r.Rwidget_is_valid(this.id)) {
+						this.setAttribute(attribute, wanted);
+					}
+				};
+				if (deferred) {
+					// (the events of one change come from one call of C, which ends before the microtasks)
+					queueMicrotask(putBack);
+				} else {
+					putBack();
 				}
 			}
 		});

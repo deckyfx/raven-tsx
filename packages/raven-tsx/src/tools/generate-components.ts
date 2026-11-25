@@ -101,7 +101,7 @@ const HEADER = "// Generated from the schema of Raven by src/tools/generate-comp
 const core = [
 	HEADER,
 	'import type { Pointer } from "bun:ffi";',
-	'import type { MeasuredSize, Painter, PlotView } from "./events";',
+	'import type { MeasuredSize, Painter, PlotView, SystemWebViewEvent } from "./events";',
 	'import type { PlotDragLine, PlotSeries, TreeItem } from "./props";',
 	'import type { RDropEvent, REvent, Rid, RTileItem } from "./raven";',
 ];

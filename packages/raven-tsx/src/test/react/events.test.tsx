@@ -7,7 +7,7 @@ import { createContext, createRef, useContext, useLayoutEffect, useRef, useState
 import * as r from "../../core/raven";
 import { eventStats, nextFrame } from "../../core/events";
 import {
-	BlockEditor, Button, Carousel, Chart, ColorPicker, createPortal, createWindow, Custom, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
+	BlockEditor, Button, Carousel, Chart, ColorPicker, ComboBox, createPortal, createWindow, Custom, DiffView, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, SystemWebView, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, usePermission, VBox, Viewport, webCallback, webFunctions, WebView, Window, WrapBox,
 	type WidgetInstance, type WindowInstance,
 } from "../../react/index";
 
@@ -1083,6 +1083,17 @@ test("the functions of raven_web come from the library, and WebView is a tag onc
 	webFunctions().Rweb_set_browser_path(null);
 	expect(webFunctions().Rweb_view_is_valid(page.current?.widget ?? r.R_INVALID_ID)).toBe(1);
 	expect(webFunctions().Rweb_view_get_zoom(page.current?.widget ?? r.R_INVALID_ID)).toBeCloseTo(1.5, 5);
+	// (the callbacks of raven_web, made the same way on Bun and on Node.js)
+	const view = page.current?.widget ?? r.R_INVALID_ID;
+	const answers: Array<readonly [number, string | null, string | null]> = [];
+	webFunctions().Rweb_view_set_message_callback(view, webCallback("message", () => {}), null);
+	webFunctions().Rweb_view_set_event_callback(view, webCallback("event", () => {}), null);
+	webFunctions().Rweb_view_run_javascript(view, Buffer.from("1 + 1\0"), webCallback("result", (from, result, error) => void answers.push([from, result, error])), null);
+	await settle(50);
+	// (no browser to run it in: the answer says why)
+	expect(answers).toEqual([[view, null, expect.stringContaining("was not found")]]);
+	webFunctions().Rweb_view_set_message_callback(view, null, null);
+	webFunctions().Rweb_view_set_event_callback(view, null, null);
 });
 
 /** Never called: what the compiler must refuse. */
@@ -1290,6 +1301,26 @@ test("a Table that selects several rows keeps the user's rows after an event, wh
 	// (one row at a time: what Selected says comes back after the event, as for a ListView)
 	root?.render(<Rows multiple={false} />);
 	await settle();
+	press(r.R_KEY_DOWN);
+	await settle();
+	expect(r.Rtable_get_selected(find("t"))).toBe(0);
+});
+
+test("a Table whose MultiSelect={false} came after SelectionMode=\"Multiple\" selects one row, and Selected comes back", async () => {
+	const table = createRef<WidgetInstance>();
+	function Rows({ single }: { single: boolean }): ReactNode {
+		return (
+			<VBox>
+				<Table ref={table} Name="t" Height={200} Columns={["A"]} RowCount={4} CellText={(row) => `row ${row}`} SelectionMode="Multiple" {...(single ? { MultiSelect: false } : {})} Selected={0} OnChanged={() => {}} />
+			</VBox>
+		);
+	}
+	await mount(<Rows single={false} />);
+	// (set last, MultiSelect decides: the table is of one row now, whatever SelectionMode said)
+	root?.render(<Rows single />);
+	await settle();
+	expect(r.Rtable_get_selection_mode(find("t"))).toBe(r.R_TABLE_SELECTION_SINGLE);
+	table.current?.focus();
 	press(r.R_KEY_DOWN);
 	await settle();
 	expect(r.Rtable_get_selected(find("t"))).toBe(0);
@@ -1565,3 +1596,139 @@ test("a Carousel shows the Page of its props from the start, after a remake, and
 	expect(r.Rcarousel_get_page(find("c"))).toBe(2);
 });
 
+
+test("an editable ComboBox gives what is typed, and holds the Text its prop says", async () => {
+	const typed: string[] = [];
+	function Field({ follow }: { follow: boolean }): ReactNode {
+		const [text, setText] = useState("Paris");
+		return (
+			<VBox>
+				<ComboBox Name="c" Editable Items={["Paris", "Rome"]} Text={text} OnTextChanged={(value) => { typed.push(value); if (follow) setText(value); }} />
+			</VBox>
+		);
+	}
+	await mount(<Field follow />);
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("Paris");
+	// (in its field, left of the arrow)
+	const typeAtEnd = (text: string): void => {
+		const [x, y, , height] = r.Rwidget_get_rect(find("c"));
+		clickAt(x + 10, y + height / 2);
+		press(r.R_KEY_END);
+		r.Rwindow_inject_text(window, text);
+	};
+	typeAtEnd("!");
+	await settle();
+	expect(typed.at(-1)).toBe("Paris!");
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("Paris!");
+	// (a text the state does not follow goes back to the prop after the event)
+	root?.render(<Field follow={false} />);
+	await settle();
+	typeAtEnd("?");
+	await settle();
+	expect(typed.at(-1)).toBe("Paris!?");
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("Paris!");
+});
+
+test("an editable ComboBox with OnChanged too keeps the caret where the user types", async () => {
+	const changed: number[] = [];
+	function Field({ follow }: { follow: boolean }): ReactNode {
+		const [text, setText] = useState("abcd");
+		return (
+			<VBox>
+				<ComboBox Name="c" Editable Items={["abcd"]} Text={text} OnChanged={(index) => changed.push(index)} OnTextChanged={(value) => { if (follow) setText(value); }} />
+			</VBox>
+		);
+	}
+	await mount(<Field follow />);
+	// (after the a: C says OnChanged(-1), then OnTextChanged, for each key; Text must not come back between them)
+	const [x, y, , height] = r.Rwidget_get_rect(find("c"));
+	clickAt(x + 10, y + height / 2);
+	press(r.R_KEY_HOME);
+	press(r.R_KEY_RIGHT);
+	r.Rwindow_inject_text(window, "X");
+	await settle();
+	r.Rwindow_inject_text(window, "Y");
+	await settle();
+	expect(changed).toContain(-1);
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("aXYbcd");
+	// (a text the state does not take still goes back, once the change is over)
+	root?.render(<Field follow={false} />);
+	await settle();
+	r.Rwindow_inject_text(window, "Z");
+	await settle();
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("aXYbcd");
+});
+
+test("a Table asks about the text typed in a cell, and false keeps the editor open", async () => {
+	const edits: Array<readonly [number, number, string]> = [];
+	const table = createRef<WidgetInstance>();
+	await mount(
+		<VBox>
+			<Table ref={table} Name="t" Height={200} Markup={`<Column Header="Name" Editable="true"/><Column Header="Age" Editable="true"/>`} RowCount={2} CellText={(row, column) => `${row}:${column}`}
+				OnCellEdited={(row, column, text) => { edits.push([row, column, text]); return text !== "no"; }} />
+		</VBox>,
+	);
+	const widget = find("t");
+	expect(r.Rtable_is_column_editable(widget, 1)).toBe(1);
+	expect(r.Rtable_edit_cell(widget, 1, 1)).toBe(1);
+	r.Rwindow_inject_text(window, "no");
+	expect(r.Rtable_end_edit(widget, 1)).toBe(0);
+	expect(r.Rtable_is_editing(widget)).toBe(1);
+	expect(r.Rtable_end_edit(widget, 0)).toBe(1);
+	expect(r.Rtable_edit_cell(widget, 0, 0)).toBe(1);
+	r.Rwindow_inject_text(window, "Ada");
+	press(r.R_KEY_ENTER);
+	await settle();
+	expect(r.Rtable_is_editing(widget)).toBe(0);
+	expect(edits).toEqual([[1, 1, "no"], [0, 0, "Ada"]]);
+});
+
+test("a DiffView says the line clicked, on which side, and whether it was its number", async () => {
+	const clicks: Array<readonly [string, number, boolean]> = [];
+	await mount(
+		<VBox>
+			<DiffView Name="d" Height={240} Mode="Split" Left={"one\ntwo\nthree\n"} Right={"one\n2\nthree\n"} OnLineClicked={(side, line, inGutter) => clicks.push([side, line, inGutter])} />
+		</VBox>,
+	);
+	const widget = find("d");
+	expect(r.Rdiff_view_get_change_count(widget)).toBe(1);
+	const [x, y, width] = r.Rwidget_get_rect(widget);
+	// (down the middle of each side, until a line of each was clicked)
+	for (let row = 0; row < 60 && clicks.length < 2; row += 4) {
+		clickAt(x + width * 0.3, y + row);
+		clickAt(x + width * 0.8, y + row);
+	}
+	await settle();
+	expect(clicks.length).toBeGreaterThanOrEqual(2);
+	expect(new Set(clicks.map(([side]) => side))).toEqual(new Set(["Left", "Right"]));
+	expect(clicks.every(([, line, inGutter]) => line >= 1 && typeof inGutter === "boolean")).toBe(true);
+});
+
+test("a SystemWebView and an Image take the functions of their events, and give them back", async () => {
+	const page = createRef<WidgetInstance>();
+	await mount(
+		<VBox>
+			<SystemWebView ref={page} Name="w" Height={120} Html="<p>hello</p>" OnMessage={() => {}} OnPageEvent={() => {}} />
+			<Image Name="i" Width={16} Height={16} OnFinished={() => {}} />
+		</VBox>,
+	);
+	expect(eventStats().handlers).toBe(3);
+	// (in a headless run there is no engine of the system: it says so, and keeps what it was given)
+	expect(r.Rsystem_web_view_is_supported()).toBeOneOf([0, 1]);
+	expect(r.Rwidget_is_valid(page.current?.widget ?? r.R_INVALID_ID)).toBe(1);
+});
+
+test("usePermission gives the status as state, and the answer of a request", async () => {
+	const held: { ask?: () => Promise<string> } = {};
+	function Camera(): ReactNode {
+		const [status, request] = usePermission("camera");
+		held.ask = request;
+		return <VBox><Label Name="status">{status}</Label></VBox>;
+	}
+	await mount(<Camera />);
+	expect(r.Rlabel_get_text(find("status"))).toBe("unsupported");
+	const answer = held.ask?.();
+	await settle();
+	expect(await answer).toBe("unsupported");
+	expect(r.Rlabel_get_text(find("status"))).toBe("unsupported");
+});

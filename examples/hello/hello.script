@@ -1,0 +1,13 @@
+# Raven's examples/headless/hello.script, which drives this port unchanged: hello names none of its
+# widgets, so they are found by what they read.
+#
+#   bun run smoke
+#
+# (RAVEN_HEADLESS=1: no window on the screen; the exit code says whether it passed)
+
+expect "text:Press the button" shown
+click "text:Click me"
+expect "text:Clicked 1 time" shown
+click "text:Click me"
+expect "text:Clicked 2 times" shown
+mark clicked-twice

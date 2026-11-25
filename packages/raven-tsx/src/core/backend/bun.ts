@@ -25,14 +25,16 @@ function decode(arg: NativeArg, raw: number | Pointer | null): NativeValue {
 
 /**
  * A function C can call, with what it gives decoded, and its user data last, which the function
- * does not read. It lives for ever: the core makes one per kind of event, shared by the widgets.
+ * does not read unless `withUserData` says so: then it comes after the others, as an address. It
+ * lives for ever: the core makes one per kind of event, shared by the widgets.
  */
-export function nativeCallback(args: readonly NativeArg[], returns: NativeReturn, run: (...values: NativeValue[]) => NativeResult): NativeCallback {
+export function nativeCallback(args: readonly NativeArg[], returns: NativeReturn, run: (...values: NativeValue[]) => NativeResult, withUserData = false): NativeCallback {
 	// (a text returned is read by C after the call: it lives until the next one)
 	let text = Buffer.from([0]);
 	const callback = new JSCallback(
 		(...raw: (number | Pointer | null)[]): number | Pointer | void => {
-			const result = run(...args.map((arg, index) => decode(arg, raw[index] ?? null)));
+			const values = args.map((arg, index) => decode(arg, raw[index] ?? null));
+			const result = withUserData ? run(...values, raw[args.length] ?? null) : run(...values);
 			if (returns === "text") {
 				text = Buffer.from(`${typeof result === "string" ? result : ""}\0`);
 				return ptr(text);
@@ -59,4 +61,17 @@ export function callFunction(address: Pointer, seconds: number, userData: Pointe
 /** The address of what an application gives as user data: an array, which stays alive meanwhile. */
 export function addressOf(userData: Pointer | NodeJS.TypedArray | null): Pointer | null {
 	return userData === null || typeof userData === "number" ? userData : ptr(userData);
+}
+
+/** The address of a structure C gave: bun:ffi reads it where it is, so its bytes are there. */
+export function addressOfStruct(struct: { readonly _bytes: Uint8Array }): Pointer {
+	return ptr(struct._bytes);
+}
+
+/**
+ * A function of C a library outside the binding calls (`raven_web.h`): its address, and it lives
+ * for ever. On Bun a JSCallback, as `nativeCallback` makes; `path` is the library, for Node.js.
+ */
+export function foreignCallback(_path: string, args: readonly NativeArg[], returns: "void" | "i32", run: (...values: NativeValue[]) => NativeResult): Pointer {
+	return nativeCallback(args, returns, run);
 }

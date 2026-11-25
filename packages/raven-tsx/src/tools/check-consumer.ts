@@ -9,7 +9,8 @@
  * one of Solid: each is a Hello World example, with a file that passes `undefined` to optional props
  * (`exactOptionalPropertyTypes`). The one of Solid runs through the plugin of the package, as its
  * bunfig.toml preloads it, and renders a signal. A third runs under Node.js, installed by npm: React
- * rendered headless, an action fired, the state it changed shown. It needs the addon of Raven's
+ * rendered headless, an action fired, the state it changed shown, two services of the device
+ * answered, and the web pages opened where Node.js has node:ffi. It needs the addon of Raven's
  * Node.js binding in the package of the platform, which Windows does not have yet.
  *
  * A last application has Solid 1, as one written before Solid 2 has it: the preload of Bun, and the
@@ -267,7 +268,7 @@ try {
 		await Bun.write(`${node}/package.json`, JSON.stringify(nodeManifest, null, 2));
 		await Bun.write(`${node}/check.mjs`, [
 			'import { createElement as h, useState } from "react";',
-			'import { raven as r } from "@decky.fx/raven-tsx";',
+			'import { raven as r, registerWebView, requestPermission, takePhoto, webCallback, webFunctions } from "@decky.fx/raven-tsx";',
 			'import { Button, createWindow, Label, VBox } from "@decky.fx/raven-tsx/react";',
 			"",
 			"const desc = new r.RInitDesc();",
@@ -293,6 +294,36 @@ try {
 			"r.Raction_fire(r.Rwidget_get_action(add), add);",
 			"await settle();",
 			'const shown = r.Rlabel_get_text(r.Rwidget_find(window, "count"));',
+			"// (the services of the device, answered at a later frame through the addon: none of them on a desktop)",
+			'const asked = Promise.all([requestPermission("camera"), takePhoto()]);',
+			"await settle();",
+			"const [camera, photo] = await asked;",
+			'if (camera !== "unsupported" || photo.result !== "unsupported") {',
+			'	throw new Error(`the camera is ${camera}, and a photo ${photo.result}, on a desktop`);',
+			"}",
+			"// (web pages through node:ffi, where Node.js has it; elsewhere a RavenError that says so. A script",
+			"// with no browser to run it in is answered through a callback of node:ffi, which says why)",
+			"try {",
+			"	registerWebView();",
+			"	const web = webFunctions();",
+			"	web.Rweb_is_available();",
+			'	web.Rweb_set_browser_path(Buffer.from("/nonexistent/raven-check-browser\\0"));',
+			"	const view = web.Rweb_view_create();",
+			"	web.Rweb_set_browser_path(null);",
+			"	const answers = [];",
+			'	web.Rweb_view_run_javascript(view, Buffer.from("1 + 1\\0"), webCallback("result", (from, result, error) => answers.push([from, result, error])), null);',
+			"	for (let turn = 0; turn < 10 && answers.length === 0; turn++) {",
+			"		await settle();",
+			"	}",
+			"	r.Rwidget_destroy(view);",
+			'	if (answers.length !== 1 || answers[0][0] !== view || answers[0][1] !== null || !String(answers[0][2]).includes("was not found")) {',
+			"		throw new Error(`a script of a web page on Node.js was answered ${JSON.stringify(answers)}`);",
+			"	}",
+			"} catch (error) {",
+			'	if (!String(error).includes("node:ffi")) {',
+			"		throw error;",
+			"	}",
+			"}",
 			"root.unmount();",
 			"r.Rwindow_destroy(window);",
 			"r.Rshutdown();",

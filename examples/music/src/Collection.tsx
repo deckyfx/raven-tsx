@@ -86,7 +86,7 @@ export function Collection(): ReactNode {
 						</Border>
 						<VBox Spacing={8} Slot={{ Fill: 1, VAlign: "Bottom" }}>
 							<Label Text={head.kind} Class="eyebrow" />
-							<Heading Text={head.title} TextSize={titleSize} Wrap Color="white" Appear="FlyUp" />
+							<Heading Name="collection.title" Text={head.title} TextSize={titleSize} Wrap Color="white" Appear="FlyUp" />
 							<Label Text={head.description} Wrap Opacity={0.8} Color="white" Visibility={head.description ? "Visible" : "Collapsed"} />
 							<HBox Spacing={8}>
 								<Cover Album={head.cover} Size={24} CornerRadius={12} Slot={{ VAlign: "Center" }} />

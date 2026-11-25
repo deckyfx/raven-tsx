@@ -1,0 +1,98 @@
+{
+  "raven": "0.3.0",
+  "backend": "macos-metal",
+  "windows": [
+    {
+      "type": "Window",
+      "title": "Hello Raven",
+      "size": [420, 220],
+      "scale": 1,
+      "visible": true,
+      "active": true,
+      "focus": "Button",
+      "content": {
+        "type": "Overlay",
+        "name": "raven-tsx.content",
+        "path": "raven-tsx.content",
+        "role": "none",
+        "bounds": [0, 0, 420, 220],
+        "shown": true,
+        "enabled": true,
+        "children": [
+          {
+            "type": "VBox",
+            "role": "none",
+            "bounds": [118, 60, 184, 100],
+            "shown": true,
+            "enabled": true,
+            "children": [
+              {
+                "type": "Label",
+                "role": "text",
+                "text": "Hello from Raven",
+                "bounds": [118, 60, 184, 32],
+                "shown": true,
+                "enabled": true
+              },
+              {
+                "type": "Label",
+                "role": "text",
+                "text": "Clicked 2 times",
+                "bounds": [165.5, 104, 89, 18],
+                "shown": true,
+                "enabled": true
+              },
+              {
+                "type": "HBox",
+                "role": "none",
+                "bounds": [149, 134, 122, 26],
+                "shown": true,
+                "enabled": true,
+                "children": [
+                  {
+                    "type": "Button",
+                    "role": "button",
+                    "text": "Click me",
+                    "description": "Counts the clicks",
+                    "bounds": [149, 134, 70, 26],
+                    "shown": true,
+                    "enabled": true,
+                    "focused": true,
+                    "children": [
+                      {
+                        "type": "Label",
+                        "role": "text",
+                        "text": "Click me",
+                        "bounds": [159, 138, 50, 18],
+                        "shown": true,
+                        "enabled": true
+                      }
+                    ]
+                  },
+                  {
+                    "type": "Button",
+                    "role": "button",
+                    "text": "Quit",
+                    "bounds": [227, 134, 44, 26],
+                    "shown": true,
+                    "enabled": true,
+                    "children": [
+                      {
+                        "type": "Label",
+                        "role": "text",
+                        "text": "Quit",
+                        "bounds": [237, 138, 24, 18],
+                        "shown": true,
+                        "enabled": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

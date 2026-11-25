@@ -168,21 +168,26 @@ export async function buildLibrary(build: string): Promise<void> {
 }
 
 /**
- * Builds the addon of Raven's Node.js binding from a checkout, in its folder `build-node`, and
- * says where it is (on Windows, Raven's CMake downloads node.lib for the Node.js it finds).
+ * Builds the addon of Raven's Node.js binding from a checkout, in its folder `build-node` (or in
+ * `build`, `--node-build` of `native:local` and `raven:update`), and says where it is (on Windows, Raven's CMake downloads node.lib for the Node.js it finds).
  * Without the headers of Node.js, the package of the platform works on Bun only, which is said.
  */
-export async function buildAddon(checkout: string): Promise<string | undefined> {
-	const build = `${checkout}/build-node`;
-	const built = (): string | undefined => [`${build}/${ADDON_FILE}`, `${build}/Release/${ADDON_FILE}`].find((path) => existsSync(path));
-	// (one configured from another folder, as the CMake project of this package that built it on
-	// Windows before Raven did: CMake would refuse to configure it again)
-	if (configuredFromElsewhere(build, `${checkout}/bindings/node`)) {
-		rmSync(build, { recursive: true, force: true });
+export async function buildAddon(checkout: string, build?: string): Promise<string | undefined> {
+	const folder = build ?? `${checkout}/build-node`;
+	const built = (): string | undefined => [`${folder}/${ADDON_FILE}`, `${folder}/Release/${ADDON_FILE}`].find((path) => existsSync(path));
+	if (configuredFromElsewhere(folder, `${checkout}/bindings/node`)) {
+		// (a folder given by --node-build is the user's: it may hold another build, Raven's own library
+		// even, so it is not emptied but refused)
+		if (build !== undefined) {
+			fail(`${folder} is a build folder of CMake for another source folder than ${checkout}/bindings/node: give --node-build an empty folder, or one of the Node.js binding`);
+		}
+		// (build-node, configured from another folder, as the CMake project of this package that built
+		// it on Windows before Raven did: CMake would refuse to configure it again)
+		rmSync(folder, { recursive: true, force: true });
 	}
 	for (const command of [
-		["cmake", "-S", `${checkout}/bindings/node`, "-B", build, "-DCMAKE_BUILD_TYPE=Release"],
-		["cmake", "--build", build, "--config", "Release", "--parallel"],
+		["cmake", "-S", `${checkout}/bindings/node`, "-B", folder, "-DCMAKE_BUILD_TYPE=Release"],
+		["cmake", "--build", folder, "--config", "Release", "--parallel"],
 	]) {
 		const result = Bun.spawn(command, { stdout: "pipe", stderr: "pipe" });
 		const [output, errors, code] = await Promise.all([new Response(result.stdout).text(), new Response(result.stderr).text(), result.exited]);
@@ -313,7 +318,7 @@ export function checkComponents(): Finding {
 }
 
 /** Packages the library of a build folder for this machine, after checking that it is the pin. */
-export async function packageHostLibrary(options: { readonly build: string; readonly pin: string; readonly allowMismatch: boolean }): Promise<void> {
+export async function packageHostLibrary(options: { readonly build: string; readonly pin: string; readonly allowMismatch: boolean; readonly nodeBuild?: string | undefined }): Promise<void> {
 	const { pin, allowMismatch } = options;
 	const build = resolve(options.build);
 	const target = hostTarget();
@@ -344,7 +349,7 @@ export async function packageHostLibrary(options: { readonly build: string; read
 	const stamp = await makeStamp({ library: libraryPath, checkout, pin, verified, canOpen: true });
 	const manifest = (await Bun.file(`${PACKAGE_ROOT}/package.json`).json()) as { readonly name: string; readonly version: string };
 	// (from the checkout the library was verified against: the same Raven)
-	const addonPath = checkout && verified ? await buildAddon(checkout) : undefined;
+	const addonPath = checkout && verified ? await buildAddon(checkout, options.nodeBuild ? resolve(options.nodeBuild) : undefined) : undefined;
 	await writePlatformPackage({ mainName: manifest.name, version: manifest.version, target, libraryPath, addonPath, directory: `${PACKAGE_ROOT}/native/${target}`, stamp });
 	console.log(`native/${target} from ${libraryPath}: ${shortCommit(stamp.commit) || "unknown commit"}, Rget_version ${stamp.version}${verified ? "" : ", NOT checked against the pin"}. Run bun install if it is new.`);
 }

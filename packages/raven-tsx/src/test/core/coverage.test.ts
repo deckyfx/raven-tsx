@@ -36,6 +36,8 @@ const NOT_WIRED: Readonly<Record<string, string>> = {
 	Rwindow_set_back_callback: "Back of Android and iOS, where neither Bun nor Node.js runs",
 	Rscript_set_log_callback: "not of a widget: RavenScript, for the whole application",
 	Rscript_set_diagnostic_callback: "not of a widget: RavenScript, for the whole application",
+	Rnotification_set_callback: "not of a widget: the notifications of Rnotification_show_desc and their buttons, for the whole application",
+	Rtile_view_set_drag_out_callback: "a drag out of the window gives its data with Rdrag_begin_external during the call: through a ref",
 };
 
 /** Action attributes of the schema that give nothing, and why: the others have a type in EVENT_VALUE_TYPES. */
@@ -46,12 +48,16 @@ const ACTIONS_WITHOUT_VALUE: Readonly<Record<string, string>> = {
 	"Timeline.OnChanged": "once per gesture: OnItemChanged says which item, as it happens",
 	"NodeGraph.OnChanged": "once per gesture: OnLinked, OnMoved... say what",
 	"Chart.OnClicked": "a slice or a cell: OnSliceClicked and OnCellClicked say which",
+	"DiffView.OnClicked": "a line: OnLineClicked says which, and on which side",
+	"SystemWebView.OnChanged": "another address: OnPageEvent says what happened, and Rsystem_web_view_get_url where it is",
 };
 
 /** Tags whose attributes the user does not change. */
 const NO_USER_VALUE: readonly string[] = [
 	"Window", "VBox", "HBox", "Grid", "UniformGrid", "Overlay", "Border", "SizeBox", "Spacer", "ScrollBox", "Splitter", "WrapBox", "Canvas", "Switcher",
 	"Label", "Button", "ProgressBar", "Image", "Separator", "MenuBar", "Menu", "Viewport", "Custom", "HeaderBar", "BackgroundBlur", "Toast", "Breadcrumb",
+	// (the user folds and unfolds lines, and selects text, which no attribute holds)
+	"DiffView",
 	// (what the user selects in these has no attribute: it is read with Rtree_view_get_selected_item, Rtile_view_get_current)
 	"TreeView", "TileView",
 ];
@@ -62,12 +68,12 @@ const SETTINGS: Readonly<Record<string, string>> = {
 	Expander: "Title OnChanged",
 	Checkbox: "Text Style OnChanged",
 	Slider: "Min Max Step Orientation OnChanged",
-	TextInput: "Placeholder Password ReadOnly MaxLength InputType ReturnKey OnChanged OnCommitted",
+	TextInput: "Placeholder Password ReadOnly MaxLength InputType ReturnKey SpellCheck SpellLanguage OnChanged OnCommitted",
 	SpinBox: "Min Max Step Decimals OnChanged",
-	ComboBox: "Items OnChanged",
+	ComboBox: "Items Editable Searchable OnChanged",
 	ListView: "Items OnChanged OnActivated",
-	MenuItem: "Text Shortcut ShortcutText Checkable Separator OnClicked",
-	TextEditor: "Language LineNumbers Wrap ReadOnly Placeholder TabSize TabSpaces Completion AutoPairs TextSize Zoomable Font Markdown OnChanged",
+	MenuItem: "Text Icon Shortcut ShortcutText Checkable Separator OnClicked",
+	TextEditor: "Language LineNumbers Wrap ReadOnly Placeholder TabSize TabSpaces Completion AutoPairs TextSize Zoomable Font Markdown FindBar Folding SpellCheck SpellLanguage OnChanged",
 	// (Directory and FileName: what is shown first. No event says the user went elsewhere, and setting them again reloads the folder)
 	FileBrowser: "Directory Mode Filter FileName DefaultExtension ShowHidden Multiple Controls Places",
 	DockArea: "Movable CloseHides Tearable FloatMode",
@@ -77,11 +83,12 @@ const SETTINGS: Readonly<Record<string, string>> = {
 	Timeline: "Duration FrameRate Snapping Loop Playing HeaderWidth TrackHeight RulerHeight Preset ClipStyle ClipRadius KeyShape KeySize GridStyle PlayheadColor PlayheadWidth OnChanged",
 	BlockEditor: "Palette OnChanged",
 	NodeGraph: "Grid Flow ReadOnly FrameAll Preset LinkShape LinkWidth LinkGlow PinShape PinSize GridStyle GridSize NodeRadius HeaderStyle HeaderHeight OnChanged",
-	// (MultiSelect: whether Ctrl and Shift select several rows; Selected is still the one row, and the
-	// others are read with Rtable_get_selection)
-	Table: "Columns SortDescending ShowHeader GridLines Striped MultiSelect OnActivated",
-	DatePicker: "Min Max FirstDayOfWeek Format OnChanged",
-	TimePicker: "ShowSeconds MinuteStep OnChanged",
+	// (MultiSelect, SelectionMode: whether Ctrl and Shift select several rows; Selected is still the
+	// one row, and the others are read with Rtable_get_selection)
+	Table: "Columns SortDescending ShowHeader GridLines Striped MultiSelect SelectionMode FrozenColumns OnActivated",
+	DatePicker: "Min Max FirstDayOfWeek Format TimeZone OnChanged",
+	// (Date: the day of the time, for its time zone, which the user does not change)
+	TimePicker: "ShowSeconds MinuteStep Clock TimeZone ShowTimeZone Date OnChanged",
 	Rating: "Max AllowHalf ReadOnly StarSize OnChanged",
 	Pagination: "PageCount Siblings OnChanged",
 	// (Fit: the wheel sets the zoom and the fit becomes None, with no event; setting Fit again is the application asking for it)
@@ -90,6 +97,8 @@ const SETTINGS: Readonly<Record<string, string>> = {
 	Carousel: "Loop Autoplay Indicators Arrows Orientation OnChanged",
 	Chart: "Kind Title Format Color Legend Hole CenterText CenterCaption Min Max Value Values Fill Marker RowLabels ColumnLabels LowColor HighColor OnClicked",
 	MapView: "MinZoom MaxZoom TilePath TileSize Attribution OnChanged",
+	// (Url: the user follows links, OnPageEvent says so, and setting it again would load it again)
+	SystemWebView: "Url Source Html BaseUrl OnChanged",
 	Plot: "Title Legend Crosshair MouseText Tooltips Grid XLabel XScale XMin XMax XFormat XLinearThreshold XGrid XInverted XLocked XVisible YLabel YScale Y2Label Y2Scale OnChanged",
 };
 

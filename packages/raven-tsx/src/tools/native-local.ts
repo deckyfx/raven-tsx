@@ -10,11 +10,12 @@
  * is at the pin with no changes, and brings the build up to date before taking the library. What
  * it found goes in `raven.json`, beside the library.
  *
- * `--raven-build <folder>` says where the library is built, if not in the raven folder beside this repo.
+ * `--raven-build <folder>` says where the library is built, if not in the raven folder beside this repo,
+ * and `--node-build <folder>` where the addon of Node.js is, if not in `build-node` of the checkout.
  * `--allow-mismatch` packages whatever is there, to try a change: `raven:check` then says so.
  */
 
 import { packageHostLibrary, flag, option, readPin, checkoutPath } from "./raven-pin";
 
 const build = option("raven-build") ?? `${checkoutPath()}/build-shared`;
-await packageHostLibrary({ build, pin: await readPin(), allowMismatch: flag("allow-mismatch") });
+await packageHostLibrary({ build, pin: await readPin(), allowMismatch: flag("allow-mismatch"), nodeBuild: option("node-build") });

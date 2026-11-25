@@ -1,0 +1,20 @@
+{
+  "name": "example-web-view",
+  "description": "A web page shown by the engine of the system: Raven's web_view example in TSX",
+  "module": "src/index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.tsx",
+    "typecheck": "bun check"
+  },
+  "dependencies": {
+    "@decky.fx/raven-tsx": "workspace:*",
+    "react": "^19.3.0",
+    "react-reconciler": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19"
+  }
+}

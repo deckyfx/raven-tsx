@@ -1,0 +1,20 @@
+{
+  "name": "example-icons",
+  "description": "The icons shipped with Raven, in the color of the text: Raven's icons example in TSX",
+  "module": "src/index.tsx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run src/index.tsx",
+    "typecheck": "bun check"
+  },
+  "dependencies": {
+    "@decky.fx/raven-tsx": "workspace:*",
+    "react": "^19.3.0",
+    "react-reconciler": "^0.34.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^19"
+  }
+}
