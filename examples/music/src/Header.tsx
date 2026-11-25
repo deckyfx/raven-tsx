@@ -26,6 +26,7 @@ export function Header(): ReactNode {
 						<Icon Glyph="search" Size={18} Opacity={0.7} Slot={{ VAlign: "Center" }} />
 						<TextInput
 							ref={music.searchInput}
+							Name="search.query"
 							Class="bare"
 							Placeholder="What do you want to play?"
 							Text={music.query}

@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "dev": "bun run src/index.tsx",
-    "typecheck": "bun check"
+    "typecheck": "bun check",
+    "smoke": "RAVEN_HEADLESS=1 RAVEN_SCRIPT=music.script bun run src/index.tsx"
   },
   "dependencies": {
     "@decky.fx/raven-tsx": "workspace:*",

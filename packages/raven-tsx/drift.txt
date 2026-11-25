@@ -34,6 +34,8 @@ e9dc502cabfd206c4742e24c01bbbcdd21f00d03 1092a82 examples/effects/liquid.spv
 eb5aa825690e6b942a267efd2d4b20904efc91e8 ede33eb examples/effects/wave.spv
 318ab1d074bb52db832aa343100a3bb0b016f12c 7ab270d examples/glass/glass.xml
 cb7168a921fd9b7f5061dc68d251bd2487d1ea6a 7ab270d examples/glass/main.c
+d1857dfe711bd421aaa8eeffeb62936e3c460efb fc37a06 examples/headless/hello.script
+bb02493a4d2bea46710edf844a03bac26cd76809 fc37a06 examples/headless/music.script
 9b58e5b13120400eff3e6197d158516dcfe6539f 899a268 examples/hello/main.c
 7ef7a15a0084647fa4ed24e7049642a908b3b059 fc37a06 examples/icons/icons.xml
 3b09370e58bcfe8d8fcaa84041d867f46281138d fc37a06 examples/icons/main.c
