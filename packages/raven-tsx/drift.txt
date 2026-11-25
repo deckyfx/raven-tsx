@@ -1,5 +1,10 @@
 # The files of Raven that raven-tsx was last checked against: blob, commit accepted at, path.
 # Written by bun run raven:drift --accept. See src/tools/raven-drift.ts.
+f9a90be9d8e493b4e1cbf399613eb404562686b7 fc37a06 examples/animated_images/animated_images.xml
+c622aa4af4d40fdf0f01c24f06795e64721f2683 fc37a06 examples/animated_images/ball.png
+377fea416a738cb8af675b78ee8bfc8923c1835b fc37a06 examples/animated_images/countdown.gif
+5b5e0f68fa9fc8671dd0e64fcd158b2585a2a49a fc37a06 examples/animated_images/main.c
+24ec14ed0ce84a0d86e3b7204372a400c96ac6d3 fc37a06 examples/animated_images/spinner.gif
 0fb26d5ab03e6d7e7cdb50a8711328048428309f 1092a82 examples/animations/animations.xml
 fb3c8697fa9913e1bb4afa4121f8379b8369fc44 899a268 examples/animations/main.c
 90ab05998a76e77979612b460fcb47d5d906bf5c 1092a82 examples/browser/browser.xml
@@ -30,6 +35,8 @@ eb5aa825690e6b942a267efd2d4b20904efc91e8 ede33eb examples/effects/wave.spv
 318ab1d074bb52db832aa343100a3bb0b016f12c 7ab270d examples/glass/glass.xml
 cb7168a921fd9b7f5061dc68d251bd2487d1ea6a 7ab270d examples/glass/main.c
 9b58e5b13120400eff3e6197d158516dcfe6539f 899a268 examples/hello/main.c
+7ef7a15a0084647fa4ed24e7049642a908b3b059 fc37a06 examples/icons/icons.xml
+3b09370e58bcfe8d8fcaa84041d867f46281138d fc37a06 examples/icons/main.c
 10a43013801ffddf70c14dc5ecf0305cc3863738 c34466d examples/map/main.c
 b84c4dfd874a928889ad4d78fba93dda70c6531b c34466d examples/map/map.xml
 65427149f5438dc540114b4564693857063b0981 c34466d examples/map/world.h

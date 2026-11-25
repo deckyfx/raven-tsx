@@ -48,6 +48,8 @@ The C examples of Raven are ported to TSX in [examples](examples), with the same
 | [overlay](examples/overlay) | A window that is seen through, and the ways to blur what is behind |
 | [viewport_opengl](examples/viewport_opengl) | An OpenGL scene in the native child window of a viewport. X11 only (GLX): on a Wayland session, start it with `RAVEN_WINDOW_SYSTEM=x11`; on Windows and macOS it says it cannot make a context |
 | [viewport_vulkan](examples/viewport_vulkan) | The scene of the original, rendered in software in TypeScript |
+| [animated_images](examples/animated_images) | GIF and APNG that play in an `Image`, paused, stopped, shown frame by frame, and a countdown that says when it ended ([screenshot](docs/screenshots/animated_images.png)) |
+| [icons](examples/icons) | The icons shipped with Raven, in buttons, tabs, a tree and a gallery, in the color of the text ([screenshot](docs/screenshots/icons.png)) |
 | [carousel](examples/carousel) | An onboarding in pages that swipe, with dots, arrows, a loop and an autoplay ([screenshot](docs/screenshots/carousel.png)) |
 | [charts](examples/charts) | A dashboard of pies, donuts, gauges, sparklines and a heatmap, with live data ([screenshot](docs/screenshots/charts.png)) |
 | [device](examples/device) | The services of the device: permissions as state, the camera, the photo and file pickers, a save, the share sheet, haptics, the clipboard; `bun run smoke` plays it headless ([screenshot](docs/screenshots/device.png)) |
