@@ -152,6 +152,8 @@ The files are those of [Solid](#solid) on Bun, unchanged.
 
 For TypeScript the package has declarations of its own under Node.js (`"moduleResolution": "NodeNext"`), which need no types of Bun; resolved as a bundler (tsx, esbuild, Vite), the sources are the types, with `@types/bun`. `WebView` works on Node.js 26 too, through `node:ffi`, as Raven's Node.js binding has no `raven_web.h`: `node:ffi` is experimental there, and says so once on stderr. From Node.js 26.9 it is there by default; 26.1 to 26.8 need `--experimental-ffi`. With the permission model, it also needs `--allow-ffi`. On an older Node.js, `registerWebView` and `webFunctions()` throw a `RavenError` that says so. `SystemWebView`, the web engine of the system, is in the binding, and needs nothing more.
 
+An address that `raven` (the binding) gives is a `bigint` on Node.js, where Raven's Node.js binding keeps all 64 bits of a pointer (Android tags its pointers in the top byte, which a number would lose), and a number on Bun, as bun:ffi gives it; the types are those of Bun. Both runtimes take either kind back, so passing on what the binding gave needs nothing. Arithmetic on an address, or comparing it with a number, does: `BigInt(address) + 16n` and `Number(userData)` work on both.
+
 ## How props work
 
 The components, with their props, are generated from Raven's own schema.

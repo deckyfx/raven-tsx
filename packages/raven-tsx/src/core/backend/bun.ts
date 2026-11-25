@@ -68,6 +68,11 @@ export function addressOfStruct(struct: { readonly _bytes: Uint8Array }): Pointe
 	return ptr(struct._bytes);
 }
 
+/** An address `bytes` after another: on Bun both are numbers. */
+export function addressAt(address: Pointer, bytes: number): Pointer {
+	return (address + bytes) as Pointer;
+}
+
 /**
  * A function of C a library outside the binding calls (`raven_web.h`): its address, and it lives
  * for ever. On Bun a JSCallback, as `nativeCallback` makes; `path` is the library, for Node.js.
