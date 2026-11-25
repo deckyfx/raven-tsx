@@ -6,20 +6,23 @@
  *
  *     bun run raven:update [ref]     upstream/main by default; a tag stays a tag in RAVEN_VERSION
  *
- * `--raven <folder>` says where the checkout is, `--no-fetch` stays offline, `--no-test` skips the
- * final check and tests, and `--dry-run` says what would happen and stops.
+ * `--raven <folder>` says where the checkout is, `--raven-build <folder>` where its shared library
+ * is built (`build-shared` of the checkout by default; the checkout's `build` is then left alone)
+ * and `--node-build <folder>` where the addon of Node.js is (`build-node`), `--no-fetch` stays
+ * offline, `--no-test` skips the final check and tests, and `--dry-run` says what would happen and stops.
  */
 
 import { shortCommit } from "../core/library-check";
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { countOf, diffApi, formatDiff, newCallbackSetters } from "./raven-api";
 import { driftCountAt } from "./raven-drift";
-import { apiAt, checkoutPath, commitOf, fail, fileAt, flag, git, nameOf, packageHostLibrary, PACKAGE_ROOT, readPin, VENDORED_BINDINGS, writePin } from "./raven-pin";
+import { apiAt, checkoutPath, commitOf, fail, fileAt, flag, git, nameOf, option, packageHostLibrary, PACKAGE_ROOT, readPin, VENDORED_BINDINGS, writePin } from "./raven-pin";
 
 const checkout = checkoutPath();
 const remote = git(checkout, "remote", "get-url", "upstream") ? "upstream" : "origin";
 const dryRun = flag("dry-run");
-const asked = process.argv.slice(2).find((argument, index, all) => !argument.startsWith("--") && all[index - 1] !== "--raven") ?? `${remote}/main`;
+const asked = process.argv.slice(2).find((argument, index, all) => !argument.startsWith("--") && !["--raven", "--raven-build", "--node-build"].includes(all[index - 1] ?? "")) ?? `${remote}/main`;
 
 if (!flag("no-fetch") && !Bun.spawnSync(["git", "-C", checkout, "fetch", "-q", "--tags", remote], { stdout: "ignore", stderr: "ignore" }).success) {
 	console.warn(`could not fetch ${remote}: going on with what ${checkout} has`);
@@ -65,18 +68,19 @@ if (head !== commit) {
 	);
 }
 
-const shared = `${checkout}/build-shared`;
+const ownBuild = option("raven-build");
+const shared = ownBuild ? resolve(ownBuild) : `${checkout}/build-shared`;
 if (!existsSync(`${shared}/CMakeCache.txt`)) {
-	await run("configure build-shared", ["cmake", "-S", checkout, "-B", shared, "-DCMAKE_BUILD_TYPE=Release", "-DRAVEN_BUILD_SHARED=ON"], checkout);
+	await run(`configure ${shared}`, ["cmake", "-S", checkout, "-B", shared, "-DCMAKE_BUILD_TYPE=Release", "-DRAVEN_BUILD_SHARED=ON"], checkout);
 }
 await run("build the shared library", ["cmake", "--build", shared, "--target", "raven", "--config", "Release", "--parallel"], checkout);
-if (existsSync(`${checkout}/build/CMakeCache.txt`)) {
+if (!ownBuild && existsSync(`${checkout}/build/CMakeCache.txt`)) {
 	await run("build the static library and the examples", ["cmake", "--build", `${checkout}/build`, "--config", "Release", "--parallel"], checkout);
 }
 
 console.log("- package the library, for the new pin");
 if (!dryRun) {
-	await packageHostLibrary({ build: shared, pin, allowMismatch: false });
+	await packageHostLibrary({ build: shared, pin, allowMismatch: false, nodeBuild: option("node-build") });
 }
 await run("link it", ["bun", "install"], `${PACKAGE_ROOT}/../..`);
 

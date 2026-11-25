@@ -472,6 +472,8 @@ Then, in `examples/helloworld`: `bun run dev`, or `bun run build`. Every other e
 | Check that everything agrees with the pin | `bun run raven:check` |
 | Move to another Raven, or to the latest | `bun run raven:update [ref]` |
 
+With a checkout that others build in too, `--raven-build <folder>` and `--node-build <folder>` (of `native:local` and `raven:update`) say where the library and the addon of Node.js are built, in place of its `build-shared` and `build-node`.
+
 `RAVEN_VERSION` says which Raven this is, a full commit or a tag, and nothing else does. `raven:update` is the way to change it: it moves the checkout, builds the libraries, packages one, and only then takes the binding, writes the pin and generates the components, since a newer library works with an older binding and the opposite stops every application at startup. It stops at the first step that fails, and can be run again.
 
 Nothing in a library says which commit it is: `Rget_version` is the same for every commit between two releases. So `native:local` asks CMake which checkout the build folder belongs to, refuses it unless that checkout is at the pin with no changes, brings the build up to date, and writes `raven.json` beside the library. `--allow-mismatch` packages a library to try a change, and `raven:check` then says so. An application started with a library that lacks what the binding needs says so too, rather than naming one symbol.

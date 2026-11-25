@@ -168,12 +168,11 @@ export async function buildLibrary(build: string): Promise<void> {
 }
 
 /**
- * Builds the addon of Raven's Node.js binding from a checkout, in its folder `build-node`, and
- * says where it is (on Windows, Raven's CMake downloads node.lib for the Node.js it finds).
+ * Builds the addon of Raven's Node.js binding from a checkout, in its folder `build-node` (or in
+ * `build`, `--node-build` of `native:local` and `raven:update`), and says where it is (on Windows, Raven's CMake downloads node.lib for the Node.js it finds).
  * Without the headers of Node.js, the package of the platform works on Bun only, which is said.
  */
-export async function buildAddon(checkout: string): Promise<string | undefined> {
-	const build = `${checkout}/build-node`;
+export async function buildAddon(checkout: string, build = `${checkout}/build-node`): Promise<string | undefined> {
 	const built = (): string | undefined => [`${build}/${ADDON_FILE}`, `${build}/Release/${ADDON_FILE}`].find((path) => existsSync(path));
 	// (one configured from another folder, as the CMake project of this package that built it on
 	// Windows before Raven did: CMake would refuse to configure it again)
@@ -313,7 +312,7 @@ export function checkComponents(): Finding {
 }
 
 /** Packages the library of a build folder for this machine, after checking that it is the pin. */
-export async function packageHostLibrary(options: { readonly build: string; readonly pin: string; readonly allowMismatch: boolean }): Promise<void> {
+export async function packageHostLibrary(options: { readonly build: string; readonly pin: string; readonly allowMismatch: boolean; readonly nodeBuild?: string | undefined }): Promise<void> {
 	const { pin, allowMismatch } = options;
 	const build = resolve(options.build);
 	const target = hostTarget();
@@ -344,7 +343,7 @@ export async function packageHostLibrary(options: { readonly build: string; read
 	const stamp = await makeStamp({ library: libraryPath, checkout, pin, verified, canOpen: true });
 	const manifest = (await Bun.file(`${PACKAGE_ROOT}/package.json`).json()) as { readonly name: string; readonly version: string };
 	// (from the checkout the library was verified against: the same Raven)
-	const addonPath = checkout && verified ? await buildAddon(checkout) : undefined;
+	const addonPath = checkout && verified ? await buildAddon(checkout, options.nodeBuild ? resolve(options.nodeBuild) : undefined) : undefined;
 	await writePlatformPackage({ mainName: manifest.name, version: manifest.version, target, libraryPath, addonPath, directory: `${PACKAGE_ROOT}/native/${target}`, stamp });
 	console.log(`native/${target} from ${libraryPath}: ${shortCommit(stamp.commit) || "unknown commit"}, Rget_version ${stamp.version}${verified ? "" : ", NOT checked against the pin"}. Run bun install if it is new.`);
 }
