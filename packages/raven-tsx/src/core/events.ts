@@ -36,6 +36,12 @@ export interface PlotView {
 	readonly Y2: readonly [number, number];
 }
 
+/** What happens in a `SystemWebView`, as `OnPageEvent` says it: the address, the title, a load that starts, ends or fails. */
+export type SystemWebViewEvent = "Navigated" | "Title" | "Loading" | "Loaded" | "Failed";
+
+/** `OnLineClicked` of a `DiffView`. */
+type DiffLineHandler = (side: "Left" | "Right", line: number, inGutter: boolean) => void;
+
 /** What a function of two values from C receives: an index, and a flag. */
 type IndexAndFlagHandler = (index: number, flag: boolean) => void;
 
@@ -521,6 +527,45 @@ function drawnEvent(connect: Connect, args: readonly NativeArg[]): NativeEvent {
 }
 
 /**
+ * An event whose function may refuse what the user did by returning false: anything else, nothing
+ * included, accepts it. An exception refuses it. A change made by the renderer is accepted.
+ */
+function refusableEvent(connect: Connect, args: readonly NativeArg[]): NativeEvent {
+	return new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", ...args], "i32", (id, ...values) => {
+		const widget = widgetOf(id);
+		const handler = handlerOf(widget) as ((...values: NativeValue[]) => boolean | void) | undefined;
+		let answer = 1;
+		if (handler) {
+			eventScope.run(() => {
+				answer = 0;
+				answer = handler(...values.slice(0, args.length)) === false ? 0 : 1;
+			}, () => controlledSync.run(widget));
+		}
+		return answer;
+	}));
+}
+
+/** The names of what happens in a SystemWebView, by the value C gives. */
+const PAGE_EVENTS: Readonly<Record<number, SystemWebViewEvent>> = {
+	[r.R_SYSTEM_WEB_VIEW_NAVIGATED]: "Navigated",
+	[r.R_SYSTEM_WEB_VIEW_TITLE]: "Title",
+	[r.R_SYSTEM_WEB_VIEW_LOADING]: "Loading",
+	[r.R_SYSTEM_WEB_VIEW_LOADED]: "Loaded",
+	[r.R_SYSTEM_WEB_VIEW_FAILED]: "Failed",
+};
+
+/** `OnPageEvent` of a SystemWebView: what happened, by its name. */
+const webPageEvent = (connect: Connect): NativeEvent => valueEvent<SystemWebViewEvent | undefined>(connect, "i32", (value) => PAGE_EVENTS[numberOf(value)]);
+
+/** `OnLineClicked` of a DiffView: the side, the line on that side from 1, and whether its number was clicked. */
+const diffLineEvent = (connect: Connect): NativeEvent => new NativeEvent(connect, (handlerOf) => nativeCallback(["u32", "i32", "i32", "i32"], "void", (id, side, line, inGutter) => {
+	const handler = handlerOf(widgetOf(id)) as DiffLineHandler | undefined;
+	if (handler) {
+		eventScope.run(() => handler(numberOf(side) === r.R_DIFF_LEFT ? "Left" : "Right", numberOf(line), inGutter !== 0));
+	}
+}));
+
+/**
  * The events with a value, by tag. `OnClicked`, `OnChanged`, `OnCommitted` and `OnActivated`
  * as XML attributes all set the one action of a widget, without a value, and for a TextInput
  * it only fires on Enter. These callbacks fire at each change, with the value.
@@ -533,7 +578,11 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 	Checkbox: { OnChanged: flagEvent(r.Rcheckbox_set_changed_callback) },
 	Slider: { OnChanged: floatEvent(r.Rslider_set_changed_callback) },
 	SpinBox: { OnChanged: doubleEvent(r.Rspin_box_set_changed_callback) },
-	ComboBox: { OnChanged: indexEvent(r.Rcombo_box_set_changed_callback) },
+	ComboBox: {
+		OnChanged: indexEvent(r.Rcombo_box_set_changed_callback),
+		// (the text typed in an editable or searchable combo box)
+		OnTextChanged: textEvent(r.Rcombo_box_set_text_changed_callback),
+	},
 	TabView: {
 		OnChanged: indexEvent(r.Rtab_view_set_changed_callback),
 		OnClose: requestEvent(r.Rtab_view_set_close_callback, ["i32", "u32"]),
@@ -560,6 +609,8 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 		OnActivated: indexEvent(r.Rtable_set_activated_callback),
 		OnSort: indexAndFlagEvent(r.Rtable_set_sort_callback),
 		CellColor: colorEvent(r.Rtable_set_cell_color_callback, 2),
+		// (the text the user typed in a cell of an editable column: false refuses it)
+		OnCellEdited: refusableEvent(r.Rtable_set_cell_edited_callback, ["i32", "i32", "text"]),
 	},
 	DatePicker: { OnChanged: threeNumbersEvent(r.Rdate_picker_set_changed_callback, (year, month, day) => `${year}-${two(month)}-${two(day)}`) },
 	TimePicker: { OnChanged: threeNumbersEvent(r.Rtime_picker_set_changed_callback, (hour, minute, second) => `${two(hour)}:${two(minute)}:${two(second)}`) },
@@ -595,6 +646,14 @@ const WIDGET_EVENTS: Readonly<Record<string, Readonly<Record<string, NativeEvent
 		OnTileCancelled: drawnEvent(r.Rmap_view_set_tile_cancel_callback, ["i32", "i32", "i32"]),
 	},
 	Toast: { OnClicked: toastActionEvent },
+	// (an animation that stopped after its last play, before the action of the image)
+	Image: { OnFinished: readEvent(r.Rimage_set_finished_callback, [], () => undefined) },
+	DiffView: { OnLineClicked: diffLineEvent(r.Rdiff_view_set_line_clicked_callback) },
+	SystemWebView: {
+		// (what the page sends with window.raven.postMessage)
+		OnMessage: textEvent(r.Rsystem_web_view_set_message_callback),
+		OnPageEvent: webPageEvent(r.Rsystem_web_view_set_event_callback),
+	},
 	TextEditor: {
 		OnChanged: readEvent(r.Rtext_editor_set_changed_callback, [], (widget) => r.Rtext_editor_get_text(widget) ?? ""),
 		OnZoom: floatEvent(r.Rtext_editor_set_zoom_callback),
@@ -813,9 +872,16 @@ export const EXTRA_PROPS: Readonly<Record<string, readonly string[]>> = {
 		"readonly CellColor?: (row: number, column: number) => string | null | void",
 		"readonly OnChanged?: (row: number) => void",
 		"readonly OnSort?: (column: number, descending: boolean) => void",
+		"readonly OnCellEdited?: (row: number, column: number, text: string) => boolean | void",
 		MARKUP,
 	],
-	Image: ["readonly Texture?: Rid"],
+	Image: ["readonly Texture?: Rid", "readonly OnFinished?: () => void"],
+	ComboBox: ["readonly OnTextChanged?: (text: string) => void"],
+	DiffView: ['readonly OnLineClicked?: (side: "Left" | "Right", line: number, inGutter: boolean) => void'],
+	SystemWebView: [
+		"readonly OnMessage?: (message: string) => void",
+		"readonly OnPageEvent?: (event: SystemWebViewEvent) => void",
+	],
 	Plot: [
 		"readonly Series?: readonly PlotSeries[]",
 		"readonly DragLines?: readonly PlotDragLine[]",

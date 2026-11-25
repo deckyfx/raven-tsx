@@ -136,17 +136,23 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	TextEditor: [
 		{ attribute: "Text", read: (widget) => r.Rtext_editor_get_text(widget) ?? "", same: sameText },
 		{ attribute: "Zoom", read: (widget) => numberText(r.Rtext_editor_get_zoom(widget)), unreported: true },
+		// (typed in the find bar, which says nothing of it)
+		{ attribute: "Search", read: (widget) => r.Rtext_editor_get_search(widget) ?? "", same: sameText, unreported: true },
 	],
 	Checkbox: [{ attribute: "Checked", read: (widget) => flagText(r.Rcheckbox_is_checked(widget)) }],
 	Slider: [{ attribute: "Value", read: (widget) => numberText(r.Rslider_get_value(widget)) }],
 	SpinBox: [{ attribute: "Value", read: (widget) => numberText(r.Rspin_box_get_value(widget)) }],
-	ComboBox: [{ attribute: "Selected", read: (widget) => numberText(r.Rcombo_box_get_selected(widget)) }],
+	ComboBox: [
+		{ attribute: "Selected", read: (widget) => numberText(r.Rcombo_box_get_selected(widget)) },
+		// (what is typed in an editable combo box, which OnTextChanged gives)
+		{ attribute: "Text", read: (widget) => r.Rcombo_box_get_text(widget) ?? "", same: sameText },
+	],
 	ListView: [{ attribute: "Selected", read: (widget) => numberText(r.Rlist_view_get_selected(widget)) }],
 	TabView: [{ attribute: "ActiveTab", read: (widget) => numberText(r.Rtab_view_get_active(widget)) }],
 	Expander: [{ attribute: "Expanded", read: (widget) => flagText(r.Rexpander_is_expanded(widget)) }],
 	Island: [{ attribute: "Expanded", read: (widget) => flagText(r.Risland_is_expanded(widget)) }],
 	Table: [
-		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)), keptWhen: (attributes) => attributes.get("MultiSelect") === "true" },
+		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)), keptWhen: (attributes) => attributes.get("MultiSelect") === "true" || attributes.get("SelectionMode") === "Multiple" },
 		{ attribute: "SortColumn", read: (widget) => numberText(r.Rtable_get_sort_column(widget)) },
 	],
 	Rating: [{ attribute: "Value", read: (widget) => numberText(r.Rrating_get_value(widget)) }],

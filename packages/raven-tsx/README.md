@@ -174,10 +174,12 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | `Checkbox`, `Expander` | `OnChanged` | `boolean` |
 | `Slider`, `SpinBox` | `OnChanged` | `number` |
 | `ComboBox`, `TabView` | `OnChanged` | index |
+| `ComboBox` | `OnTextChanged` | the text typed in an `Editable` or `Searchable` one |
 | `ListView`, `TileView` | `OnChanged`, `OnActivated` | index |
 | `TreeView` | `OnChanged`, `OnActivated` | handle of the item |
 | `Table` | `OnChanged`, `OnActivated` | row |
 | `Table` | `OnSort` | column, and whether it is descending |
+| `Table` | `OnCellEdited` | row, column and the text typed in a cell of an `Editable` column |
 | `DatePicker` | `OnChanged` | `"YYYY-MM-DD"` |
 | `TimePicker` | `OnChanged` | `"HH:MM:SS"` |
 | `Rating` | `OnChanged` | `number` |
@@ -194,6 +196,10 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | `TextEditor` | `OnZoom` | `number` |
 | `ColorPicker` | `OnChanged` | `"#RRGGBB"`, or `"#RRGGBBAA"` when it is not opaque |
 | `Label` | `OnLink` | the address of the link |
+| `DiffView` | `OnLineClicked` | `"Left"` or `"Right"`, the line on that side from 1, and whether its number was clicked |
+| `SystemWebView` | `OnMessage` | what the page sent with `window.raven.postMessage(value)` |
+| `SystemWebView` | `OnPageEvent` | `"Navigated"`, `"Title"`, `"Loading"`, `"Loaded"` or `"Failed"` |
+| `Image` | `OnFinished` | nothing: an animation stopped after its last play |
 | `MenuItem` | `OnClicked` | whether it is checked now |
 | `Island` | `OnChanged` | `boolean` |
 | `Viewport`, `<Window>` | `OnResize` | width, height |
@@ -208,13 +214,13 @@ Events with a value give it to the function, at each change. A `TextInput` gives
 | any widget, `<Window>` | `OnDrop` | an `RDropEvent` |
 | any widget | `OnEvent` | an `REvent`, before the widget sees it: the pointer over a `Custom`, for one |
 
-Some events ask: `OnClose` of a `TabView` (index, page) and of a `DockArea` (panel), `OnConnect` of a `NodeGraph` (two pins), and `OnEvent` and `OnDrop`, where true means taken. Return true to let the thing happen. A tab or a panel that stays can then go by taking its element out, which is the way to do it: when Raven closes a panel by itself, it deletes a widget React still has, which does no harm but leaves the element with a `.widget` that is no longer valid. `Documents` on a `TabView` gives its tabs a close button.
+Some events ask: `OnClose` of a `TabView` (index, page) and of a `DockArea` (panel), `OnConnect` of a `NodeGraph` (two pins), and `OnEvent` and `OnDrop`, where true means taken. Return true to let the thing happen. `OnCellEdited` of a `Table` is the other way round, as nothing is the usual answer: it keeps the text unless the function returns false, and then the editor stays open on it, after Enter or Tab, for the user to correct. A tab or a panel that stays can then go by taking its element out, which is the way to do it: when Raven closes a panel by itself, it deletes a widget React still has, which does no harm but leaves the element with a `.widget` that is no longer valid. `Documents` on a `TabView` gives its tabs a close button.
 
 Other events give nothing, and share the one action a widget has in Raven: give a widget one of them. `Timeline` and `NodeGraph` have an `OnChanged` of this kind, once per gesture.
 
-A `MapView` asks for its tiles as it is drawn, in `OnTile`: answer with `Rmap_view_set_tile` (pixels) or `Rmap_view_set_tile_failed`, at once or later, or give it `TilePath` to read them from files. Its view is the user's to move: `OnChanged` says where it went, and a new `Latitude`, `Longitude` or `Zoom` moves it, but the props are not put back after an event. A `Table` with `MultiSelect` keeps the rows the user selected in the same way; `Rtable_get_selection` reads them.
+A `MapView` asks for its tiles as it is drawn, in `OnTile`: answer with `Rmap_view_set_tile` (pixels) or `Rmap_view_set_tile_failed`, at once or later, or give it `TilePath` to read them from files. Its view is the user's to move: `OnChanged` says where it went, and a new `Latitude`, `Longitude` or `Zoom` moves it, but the props are not put back after an event. A `Table` with `MultiSelect` or `SelectionMode="Multiple"` keeps the rows the user selected in the same way; `Rtable_get_selection` reads them.
 
-Inputs are controlled, as in React DOM. With `Text={value}`, what the state says stays on screen if a handler refuses a change. An update made in an event is committed before the next event, as a click in React DOM. `ListView` and `ComboBox` keep their `Selected` when their `Items` change. A `|` in an item would split it, as `Items` is written that way in XML: for such items use `ItemText`. `FileBrowser`'s `Directory` and `Timeline`'s `Playing` are not held this way: the user changes them with no event that says so.
+Inputs are controlled, as in React DOM. With `Text={value}`, what the state says stays on screen if a handler refuses a change. An update made in an event is committed before the next event, as a click in React DOM. `ListView` and `ComboBox` keep their `Selected` when their `Items` change. A `|` in an item would split it, as `Items` is written that way in XML: for such items use `ItemText`. An editable `ComboBox` holds its `Text` as a `TextInput` does. `FileBrowser`'s `Directory`, `Timeline`'s `Playing` and `TextEditor`'s `Search` (typed in its find bar) are not held this way: the user changes them with no event that says so.
 
 ## Windows
 

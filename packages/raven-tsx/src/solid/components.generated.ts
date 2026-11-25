@@ -108,11 +108,17 @@ export const MenuItem = tag<Props.MenuItemProps>("MenuItem");
 /** A place the application draws in with its own renderer. */
 export const Viewport = tag<Props.ViewportProps>("Viewport");
 
+/** A web page shown by the engine of the system (WKWebView on macOS and iOS) over the widget; elsewhere a message. */
+export const SystemWebView = tag<Props.SystemWebViewProps>("SystemWebView");
+
 /** A widget painted and measured by the application. */
 export const Custom = tag<Props.CustomProps>("Custom");
 
 /** Text of several lines: notes, code. */
 export const TextEditor = tag<Props.TextEditorProps>("TextEditor");
+
+/** The differences between two texts or files, or a patch: one column or side by side, unchanged lines folded, the words that changed marked. */
+export const DiffView = tag<Props.DiffViewProps>("DiffView");
 
 /** The title bar of a window with a custom header; holds any widgets. */
 export const HeaderBar = tag<Props.HeaderBarProps>("HeaderBar");

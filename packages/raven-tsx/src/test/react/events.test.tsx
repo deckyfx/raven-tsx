@@ -7,7 +7,7 @@ import { createContext, createRef, useContext, useLayoutEffect, useRef, useState
 import * as r from "../../core/raven";
 import { eventStats, nextFrame } from "../../core/events";
 import {
-	BlockEditor, Button, Carousel, Chart, ColorPicker, createPortal, createWindow, Custom, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
+	BlockEditor, Button, Carousel, Chart, ColorPicker, ComboBox, createPortal, createWindow, Custom, DiffView, DockArea, FileBrowser, HBox, Image, inEventScope, Island, Label, ListView, MapView, Menu, MenuBar, MenuItem, NodeGraph, PdfView, raven, RavenRoot, registerWebView, Separator, SystemWebView, Table, tag, TabView, TextEditor, TextInput, TileView, Timeline, TreeView, useAction, useFrame, VBox, Viewport, webFunctions, WebView, Window, WrapBox,
 	type WidgetInstance, type WindowInstance,
 } from "../../react/index";
 
@@ -1565,3 +1565,94 @@ test("a Carousel shows the Page of its props from the start, after a remake, and
 	expect(r.Rcarousel_get_page(find("c"))).toBe(2);
 });
 
+
+test("an editable ComboBox gives what is typed, and holds the Text its prop says", async () => {
+	const typed: string[] = [];
+	function Field({ follow }: { follow: boolean }): ReactNode {
+		const [text, setText] = useState("Paris");
+		return (
+			<VBox>
+				<ComboBox Name="c" Editable Items={["Paris", "Rome"]} Text={text} OnTextChanged={(value) => { typed.push(value); if (follow) setText(value); }} />
+			</VBox>
+		);
+	}
+	await mount(<Field follow />);
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("Paris");
+	// (in its field, left of the arrow)
+	const typeAtEnd = (text: string): void => {
+		const [x, y, , height] = r.Rwidget_get_rect(find("c"));
+		clickAt(x + 10, y + height / 2);
+		press(r.R_KEY_END);
+		r.Rwindow_inject_text(window, text);
+	};
+	typeAtEnd("!");
+	await settle();
+	expect(typed.at(-1)).toBe("Paris!");
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("Paris!");
+	// (a text the state does not follow goes back to the prop after the event)
+	root?.render(<Field follow={false} />);
+	await settle();
+	typeAtEnd("?");
+	await settle();
+	expect(typed.at(-1)).toBe("Paris!?");
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("Paris!");
+});
+
+test("a Table asks about the text typed in a cell, and false keeps the editor open", async () => {
+	const edits: Array<readonly [number, number, string]> = [];
+	const table = createRef<WidgetInstance>();
+	await mount(
+		<VBox>
+			<Table ref={table} Name="t" Height={200} Markup={`<Column Header="Name" Editable="true"/><Column Header="Age" Editable="true"/>`} RowCount={2} CellText={(row, column) => `${row}:${column}`}
+				OnCellEdited={(row, column, text) => { edits.push([row, column, text]); return text !== "no"; }} />
+		</VBox>,
+	);
+	const widget = find("t");
+	expect(r.Rtable_is_column_editable(widget, 1)).toBe(1);
+	expect(r.Rtable_edit_cell(widget, 1, 1)).toBe(1);
+	r.Rwindow_inject_text(window, "no");
+	expect(r.Rtable_end_edit(widget, 1)).toBe(0);
+	expect(r.Rtable_is_editing(widget)).toBe(1);
+	expect(r.Rtable_end_edit(widget, 0)).toBe(1);
+	expect(r.Rtable_edit_cell(widget, 0, 0)).toBe(1);
+	r.Rwindow_inject_text(window, "Ada");
+	press(r.R_KEY_ENTER);
+	await settle();
+	expect(r.Rtable_is_editing(widget)).toBe(0);
+	expect(edits).toEqual([[1, 1, "no"], [0, 0, "Ada"]]);
+});
+
+test("a DiffView says the line clicked, on which side, and whether it was its number", async () => {
+	const clicks: Array<readonly [string, number, boolean]> = [];
+	await mount(
+		<VBox>
+			<DiffView Name="d" Height={240} Mode="Split" Left={"one\ntwo\nthree\n"} Right={"one\n2\nthree\n"} OnLineClicked={(side, line, inGutter) => clicks.push([side, line, inGutter])} />
+		</VBox>,
+	);
+	const widget = find("d");
+	expect(r.Rdiff_view_get_change_count(widget)).toBe(1);
+	const [x, y, width] = r.Rwidget_get_rect(widget);
+	// (down the middle of each side, until a line of each was clicked)
+	for (let row = 0; row < 60 && clicks.length < 2; row += 4) {
+		clickAt(x + width * 0.3, y + row);
+		clickAt(x + width * 0.8, y + row);
+	}
+	await settle();
+	expect(clicks.length).toBeGreaterThanOrEqual(2);
+	expect(new Set(clicks.map(([side]) => side))).toEqual(new Set(["Left", "Right"]));
+	expect(clicks.every(([, line, inGutter]) => line >= 1 && typeof inGutter === "boolean")).toBe(true);
+});
+
+test("a SystemWebView and an Image take the functions of their events, and give them back", async () => {
+	const page = createRef<WidgetInstance>();
+	await mount(
+		<VBox>
+			<SystemWebView ref={page} Name="w" Height={120} Html="<p>hello</p>" OnMessage={() => {}} OnPageEvent={() => {}} />
+			<Image Name="i" Width={16} Height={16} OnFinished={() => {}} />
+		</VBox>,
+	);
+	expect(eventStats().handlers).toBe(3);
+	// (in a headless run there is no engine of the system: it says so, and keeps what it was given)
+	expect(r.Rsystem_web_view_is_supported()).toBeOneOf([0, 1]);
+	expect(r.Rwidget_is_valid(page.current?.widget ?? r.R_INVALID_ID)).toBe(1);
+});
