@@ -349,7 +349,7 @@
     },
     "packages/raven-tsx": {
       "name": "@decky.fx/raven-tsx",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "dependencies": {
         "@types/react": "^19",
         "@types/react-reconciler": "^0.34",
