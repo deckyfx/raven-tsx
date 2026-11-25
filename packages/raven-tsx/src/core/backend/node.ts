@@ -54,7 +54,7 @@ const NODE_TYPES: Readonly<Record<string, string>> = {
 /** `node:ffi`, the foreign functions of Node.js: there since 26, and experimental (it says so once, on stderr). */
 function nodeFfi(): NodeFfi {
 	const ffi = process.getBuiltinModule?.("node:ffi") as NodeFfi | undefined;
-	return ffi ?? RavenError.throw(`raven-tsx: web pages (WebView) on Node.js need node:ffi, which Node.js ${process.version} does not have (26 has it; --allow-ffi with the permission model). Raven's Node.js binding does not have raven_web.h`);
+	return ffi ?? RavenError.throw(`raven-tsx: web pages (WebView) on Node.js need node:ffi, which Node.js ${process.version} does not have (26.9 and newer have it; 26.1 to 26.8 with --experimental-ffi; --allow-ffi with the permission model). Raven's Node.js binding does not have raven_web.h`);
 }
 
 /** The libraries opened, by path: `node:ffi` refuses a function asked again with another signature. */
@@ -147,8 +147,26 @@ export function addressOf(userData: Pointer | NodeJS.TypedArray | null): Pointer
 	return userData as Pointer | null;
 }
 
-/** The address of bytes C gave, as a view of them: a structure read where it is, as the addon gives it. */
-export function addressOfView(view: Uint8Array): Pointer {
+/**
+ * Where each picked file came from in the memory of the library. The addon gives the address and
+ * the binding makes the structure (`RPickedFile.from`), which on a runtime that forbids views of
+ * that memory (Electron) is a copy of the first file only: the others are read from this address.
+ */
+const pickedAt = new WeakMap<object, Pointer>();
+{
+	const picked = raven.RPickedFile as unknown as { from(pointer: Pointer | null): object | null };
+	const from = picked.from.bind(picked);
+	picked.from = (pointer) => {
+		const made = from(pointer);
+		if (made && pointer) {
+			pickedAt.set(made, pointer);
+		}
+		return made;
+	};
+}
+
+/** The address of a structure C gave, where it is in the memory of the library (not of a copy of it). */
+export function addressOfStruct(struct: { readonly _bytes: Uint8Array }): Pointer {
 	// (the binding of Node.js has `ptr`, as bun:ffi does: the types of #raven are those of Bun's binding)
-	return (raven as unknown as { ptr(view: Uint8Array): Pointer }).ptr(view);
+	return pickedAt.get(struct) ?? (raven as unknown as { ptr(view: Uint8Array): Pointer }).ptr(struct._bytes);
 }

@@ -1629,6 +1629,36 @@ test("an editable ComboBox gives what is typed, and holds the Text its prop says
 	expect(r.Rcombo_box_get_text(find("c"))).toBe("Paris!");
 });
 
+test("an editable ComboBox with OnChanged too keeps the caret where the user types", async () => {
+	const changed: number[] = [];
+	function Field({ follow }: { follow: boolean }): ReactNode {
+		const [text, setText] = useState("abcd");
+		return (
+			<VBox>
+				<ComboBox Name="c" Editable Items={["abcd"]} Text={text} OnChanged={(index) => changed.push(index)} OnTextChanged={(value) => { if (follow) setText(value); }} />
+			</VBox>
+		);
+	}
+	await mount(<Field follow />);
+	// (after the a: C says OnChanged(-1), then OnTextChanged, for each key; Text must not come back between them)
+	const [x, y, , height] = r.Rwidget_get_rect(find("c"));
+	clickAt(x + 10, y + height / 2);
+	press(r.R_KEY_HOME);
+	press(r.R_KEY_RIGHT);
+	r.Rwindow_inject_text(window, "X");
+	await settle();
+	r.Rwindow_inject_text(window, "Y");
+	await settle();
+	expect(changed).toContain(-1);
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("aXYbcd");
+	// (a text the state does not take still goes back, once the change is over)
+	root?.render(<Field follow={false} />);
+	await settle();
+	r.Rwindow_inject_text(window, "Z");
+	await settle();
+	expect(r.Rcombo_box_get_text(find("c"))).toBe("aXYbcd");
+});
+
 test("a Table asks about the text typed in a cell, and false keeps the editor open", async () => {
 	const edits: Array<readonly [number, number, string]> = [];
 	const table = createRef<WidgetInstance>();

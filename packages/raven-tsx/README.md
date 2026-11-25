@@ -150,7 +150,7 @@ Solid compiles its TSX itself: the register of the package does it under Node.js
 
 The files are those of [Solid](#solid) on Bun, unchanged.
 
-For TypeScript the package has declarations of its own under Node.js (`"moduleResolution": "NodeNext"`), which need no types of Bun; resolved as a bundler (tsx, esbuild, Vite), the sources are the types, with `@types/bun`. `WebView` works on Node.js 26 too, through `node:ffi`, as Raven's Node.js binding has no `raven_web.h`: `node:ffi` is experimental there, and says so once on stderr (with the permission model, it needs `--allow-ffi`). On an older Node.js, `registerWebView` and `webFunctions()` throw a `RavenError` that says so. `SystemWebView`, the web engine of the system, is in the binding, and needs nothing more.
+For TypeScript the package has declarations of its own under Node.js (`"moduleResolution": "NodeNext"`), which need no types of Bun; resolved as a bundler (tsx, esbuild, Vite), the sources are the types, with `@types/bun`. `WebView` works on Node.js 26 too, through `node:ffi`, as Raven's Node.js binding has no `raven_web.h`: `node:ffi` is experimental there, and says so once on stderr. From Node.js 26.9 it is there by default; 26.1 to 26.8 need `--experimental-ffi`. With the permission model, it also needs `--allow-ffi`. On an older Node.js, `registerWebView` and `webFunctions()` throw a `RavenError` that says so. `SystemWebView`, the web engine of the system, is in the binding, and needs nothing more.
 
 ## How props work
 

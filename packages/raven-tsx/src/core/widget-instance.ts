@@ -108,6 +108,13 @@ interface ControlledValue {
 	 * widget, not the props: of `MultiSelect` and `SelectionMode`, the one set last decides.
 	 */
 	readonly keptWhen?: ((widget: r.Rid) => boolean) | undefined;
+	/**
+	 * Put back once the change is over, not after the event: C gives another event of the same change
+	 * right after it, whose handler may take the value. An editable ComboBox says OnChanged(-1), then
+	 * OnTextChanged, for one key: putting Text back between them would replace the text, and the caret
+	 * would go to its end.
+	 */
+	readonly deferred?: true | undefined;
 }
 
 /** The props whose function Raven calls as the widget is drawn: a new one needs the widget drawn again. */
@@ -146,7 +153,7 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	ComboBox: [
 		{ attribute: "Selected", read: (widget) => numberText(r.Rcombo_box_get_selected(widget)) },
 		// (what is typed in an editable combo box, which OnTextChanged gives)
-		{ attribute: "Text", read: (widget) => r.Rcombo_box_get_text(widget) ?? "", same: sameText },
+		{ attribute: "Text", read: (widget) => r.Rcombo_box_get_text(widget) ?? "", same: sameText, deferred: true },
 	],
 	ListView: [{ attribute: "Selected", read: (widget) => numberText(r.Rlist_view_get_selected(widget)) }],
 	TabView: [{ attribute: "ActiveTab", read: (widget) => numberText(r.Rtab_view_get_active(widget)) }],
@@ -745,10 +752,22 @@ export class WidgetInstance implements HostNode {
 			if (data && this.resolved.handlers.has("OnChanged")) {
 				eventScope.ignoringEvents(() => data.restore(this.id, this.resolved.data));
 			}
-			for (const { attribute, unreported, keptWhen } of controlled ?? []) {
-				const wanted = this.resolved.attributes.get(attribute);
-				if (wanted !== undefined && !unreported && !keptWhen?.(this.id)) {
-					this.setAttribute(attribute, wanted);
+			for (const { attribute, unreported, keptWhen, deferred } of controlled ?? []) {
+				if (unreported || keptWhen?.(this.id)) {
+					continue;
+				}
+				const putBack = (): void => {
+					// (what the props say then: the next event of the change may have taken the value)
+					const wanted = this.resolved.attributes.get(attribute);
+					if (wanted !== undefined && this.state === "live" && r.Rwidget_is_valid(this.id)) {
+						this.setAttribute(attribute, wanted);
+					}
+				};
+				if (deferred) {
+					// (the events of one change come from one call of C, which ends before the microtasks)
+					queueMicrotask(putBack);
+				} else {
+					putBack();
 				}
 			}
 		});

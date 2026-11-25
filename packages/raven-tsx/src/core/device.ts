@@ -13,7 +13,7 @@
  */
 
 import type { Pointer } from "bun:ffi";
-import { addressOfView, nativeCallback } from "#backend";
+import { addressOfStruct, nativeCallback } from "#backend";
 import type { NativeCallback, NativeValue } from "./backend/types";
 import { RavenError } from "./errors";
 import * as r from "./raven";
@@ -144,11 +144,12 @@ function requireRaven(what: string): void {
 
 /**
  * The files C gives during its callback, copied: `count` structures one after the other at `files`,
- * an address on Bun, and on Node.js the first of them, which Raven's addon reads where it is.
+ * an address on Bun, and on Node.js the first of them, whose address the backend knows (where views
+ * of the library's memory are copies, the structure holds the first file only).
  */
 function copyFiles(files: NativeValue, count: number): PickedFile[] {
 	const copied: PickedFile[] = [];
-	const address = typeof files === "number" ? files : files instanceof r.RPickedFile ? addressOfView(files._bytes) : 0;
+	const address = typeof files === "number" ? files : files instanceof r.RPickedFile ? addressOfStruct(files) : 0;
 	if (!address) {
 		return copied;
 	}

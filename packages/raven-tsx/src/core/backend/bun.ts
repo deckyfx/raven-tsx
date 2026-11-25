@@ -63,9 +63,9 @@ export function addressOf(userData: Pointer | NodeJS.TypedArray | null): Pointer
 	return userData === null || typeof userData === "number" ? userData : ptr(userData);
 }
 
-/** The address of bytes C gave, as a view of them: a structure read where it is. */
-export function addressOfView(view: Uint8Array): Pointer {
-	return ptr(view);
+/** The address of a structure C gave: bun:ffi reads it where it is, so its bytes are there. */
+export function addressOfStruct(struct: { readonly _bytes: Uint8Array }): Pointer {
+	return ptr(struct._bytes);
 }
 
 /**
