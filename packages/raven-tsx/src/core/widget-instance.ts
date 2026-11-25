@@ -103,10 +103,11 @@ interface ControlledValue {
 	 */
 	readonly unreported?: true | undefined;
 	/**
-	 * When the user's value is kept after an event, not put back to the prop, as the attributes of
-	 * the widget say: a Table that selects several rows, whose rows setting Selected would reduce to one.
+	 * When the user's value is kept after an event, not put back to the prop, as the widget is now: a
+	 * Table that selects several rows, whose rows setting Selected would reduce to one. Read from the
+	 * widget, not the props: of `MultiSelect` and `SelectionMode`, the one set last decides.
 	 */
-	readonly keptWhen?: ((attributes: ReadonlyMap<string, string>) => boolean) | undefined;
+	readonly keptWhen?: ((widget: r.Rid) => boolean) | undefined;
 }
 
 /** The props whose function Raven calls as the widget is drawn: a new one needs the widget drawn again. */
@@ -152,7 +153,7 @@ const CONTROLLED: Readonly<Record<string, readonly ControlledValue[]>> = {
 	Expander: [{ attribute: "Expanded", read: (widget) => flagText(r.Rexpander_is_expanded(widget)) }],
 	Island: [{ attribute: "Expanded", read: (widget) => flagText(r.Risland_is_expanded(widget)) }],
 	Table: [
-		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)), keptWhen: (attributes) => attributes.get("MultiSelect") === "true" || attributes.get("SelectionMode") === "Multiple" },
+		{ attribute: "Selected", read: (widget) => numberText(r.Rtable_get_selected(widget)), keptWhen: (widget) => r.Rtable_get_selection_mode(widget) === r.R_TABLE_SELECTION_MULTIPLE },
 		{ attribute: "SortColumn", read: (widget) => numberText(r.Rtable_get_sort_column(widget)) },
 	],
 	Rating: [{ attribute: "Value", read: (widget) => numberText(r.Rrating_get_value(widget)) }],
@@ -714,7 +715,7 @@ export class WidgetInstance implements HostNode {
 		if (selected === undefined || !control) {
 			return;
 		}
-		const several = control.keptWhen?.(next.attributes) === true;
+		const several = control.keptWhen?.(this.id) === true;
 		if (previous?.attributes.get("Selected") !== selected) {
 			this.selectionTaken = false;
 		}
@@ -746,7 +747,7 @@ export class WidgetInstance implements HostNode {
 			}
 			for (const { attribute, unreported, keptWhen } of controlled ?? []) {
 				const wanted = this.resolved.attributes.get(attribute);
-				if (wanted !== undefined && !unreported && !keptWhen?.(this.resolved.attributes)) {
+				if (wanted !== undefined && !unreported && !keptWhen?.(this.id)) {
 					this.setAttribute(attribute, wanted);
 				}
 			}

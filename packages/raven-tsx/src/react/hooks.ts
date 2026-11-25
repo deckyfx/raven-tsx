@@ -58,10 +58,15 @@ export function useFrame(handler: FrameHandler): void {
  */
 export function usePermission(name: Permission): readonly [PermissionStatus, () => Promise<PermissionStatus>] {
 	const [status, setStatus] = useState<PermissionStatus>(() => getPermission(name));
+	// (the permission the state is about now: an answer of another, asked before `name` changed, is
+	// still given to whoever asked, but is not the status of this one)
+	const current = useLatest(name);
 	useEffect(() => watchPermission(name, setStatus), [name]);
 	const ask = useCallback(async (): Promise<PermissionStatus> => {
 		const answer = await requestPermission(name);
-		setStatus(answer);
+		if (current.current === name) {
+			setStatus(answer);
+		}
 		return answer;
 	}, [name]);
 	return [status, ask] as const;

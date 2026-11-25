@@ -1306,6 +1306,26 @@ test("a Table that selects several rows keeps the user's rows after an event, wh
 	expect(r.Rtable_get_selected(find("t"))).toBe(0);
 });
 
+test("a Table whose MultiSelect={false} came after SelectionMode=\"Multiple\" selects one row, and Selected comes back", async () => {
+	const table = createRef<WidgetInstance>();
+	function Rows({ single }: { single: boolean }): ReactNode {
+		return (
+			<VBox>
+				<Table ref={table} Name="t" Height={200} Columns={["A"]} RowCount={4} CellText={(row) => `row ${row}`} SelectionMode="Multiple" {...(single ? { MultiSelect: false } : {})} Selected={0} OnChanged={() => {}} />
+			</VBox>
+		);
+	}
+	await mount(<Rows single={false} />);
+	// (set last, MultiSelect decides: the table is of one row now, whatever SelectionMode said)
+	root?.render(<Rows single />);
+	await settle();
+	expect(r.Rtable_get_selection_mode(find("t"))).toBe(r.R_TABLE_SELECTION_SINGLE);
+	table.current?.focus();
+	press(r.R_KEY_DOWN);
+	await settle();
+	expect(r.Rtable_get_selected(find("t"))).toBe(0);
+});
+
 /** A drag of the left button, in steps, as a hand moves. */
 function dragFrom(x: number, y: number, dx: number, dy: number): void {
 	r.Rwindow_inject_mouse_move(window, x, y);
