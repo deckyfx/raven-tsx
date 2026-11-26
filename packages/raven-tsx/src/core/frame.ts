@@ -14,6 +14,12 @@ import { Rset_frame_callback as connectNative, type RFrameCallback, type RPointe
 /** What is called at each frame, with the seconds since the last one. */
 export type FrameHandler = (deltaSeconds: number) => void;
 
+/**
+ * An address, as either runtime gives it (a number on Bun, a bigint on Node.js), or as a number:
+ * 0 and 0n are none, as null is. The same as `PointerLike` of the binding for Node.js.
+ */
+type Address = Pointer | bigint | number;
+
 class FrameSlot {
 	private readonly subscribers = new Set<FrameHandler>();
 	private application: FrameHandler | null = null;
@@ -42,15 +48,17 @@ class FrameSlot {
 	}
 
 	/** What `Rset_frame_callback` does: one function, replaced by the next, beside the subscribers. */
-	setApplication(callback: RFrameCallback | Pointer | null, userData: RPointer): void {
-		if (typeof callback === "number") {
-			// a function of C: called from here, as it no longer has the slot to itself
+	setApplication(callback: RFrameCallback | Address | null, userData: RPointer | Address): void {
+		if (!callback) {
+			// (none: null, or the address 0, as 0 on Bun and 0n on Node.js)
+			this.application = null;
+		} else if (typeof callback === "number" || typeof callback === "bigint") {
+			// a function of C (its address: a number on Bun, a bigint on Node.js), called from here, as it
+			// no longer has the slot to itself
 			this.application = (delta) => callFunction(callback, delta, addressOf(userData));
-		} else if (callback) {
+		} else {
 			// an address, as C would give it. An array stays alive for as long as this function does.
 			this.application = (delta) => void callback(delta, addressOf(userData));
-		} else {
-			this.application = null;
 		}
 		this.sync();
 	}
@@ -72,6 +80,6 @@ export const frameSlot = new FrameSlot();
  * Registers a function called once per frame, before the layout, beside what `onFrame` added.
  * Takes the place of the one of the C API, under the same name.
  */
-export function Rset_frame_callback(callback: RFrameCallback | Pointer | null, user_data: RPointer = null): void {
+export function Rset_frame_callback(callback: RFrameCallback | Address | null, user_data: RPointer | Address = null): void {
 	frameSlot.setApplication(callback, user_data);
 }

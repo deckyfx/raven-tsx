@@ -392,10 +392,39 @@ test("Rset_frame_callback gives a function of JavaScript its user data, as C wou
 	raven.Rset_frame_callback((_delta, userData) => void seen.push(userData), ptr(data));
 	r.Rdraw_frame();
 	expect(seen.at(-1)).toBe(ptr(data));
+	// (an address as a bigint, as Node.js gives them, reaches it as an address of Bun: a number)
+	raven.Rset_frame_callback((_delta, userData) => void seen.push(userData), BigInt(ptr(data)));
+	r.Rdraw_frame();
+	expect(seen.at(-1)).toBe(ptr(data));
 	raven.Rset_frame_callback((_delta, userData) => void seen.push(userData));
 	r.Rdraw_frame();
 	expect(seen.at(-1)).toBeNull();
 	raven.Rset_frame_callback(null);
+});
+
+test("Rset_frame_callback with the address 0, a number or a bigint, takes the function away as null does", async () => {
+	await mount(<VBox><Label Name="t">t</Label></VBox>);
+	// (0 on Bun, 0n on Node.js: a function of C at 0 would be called, and crash, at the next frame)
+	const report = console.error;
+	const reported: string[] = [];
+	// (a function kept in its place that throws would be caught and reported, not seen in `calls`)
+	console.error = (...values: unknown[]): void => void reported.push(values.map(String).join(" "));
+	try {
+		for (const none of [0, 0n]) {
+			let calls = 0;
+			raven.Rset_frame_callback(() => void calls++);
+			r.Rdraw_frame();
+			expect(calls).toBe(1);
+			raven.Rset_frame_callback(none);
+			r.Rdraw_frame();
+			r.Rdraw_frame();
+			expect(calls).toBe(1);
+		}
+		expect(reported).toEqual([]);
+	} finally {
+		console.error = report;
+		raven.Rset_frame_callback(null);
+	}
 });
 
 test("an exception in a frame function does not stop the others", async () => {

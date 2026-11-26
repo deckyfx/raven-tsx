@@ -13,7 +13,7 @@
  */
 
 import type { Pointer } from "bun:ffi";
-import { addressOfStruct, nativeCallback } from "#backend";
+import { addressAt, addressOfStruct, nativeCallback } from "#backend";
 import type { NativeCallback, NativeValue } from "./backend/types";
 import { RavenError } from "./errors";
 import * as r from "./raven";
@@ -149,12 +149,12 @@ function requireRaven(what: string): void {
  */
 function copyFiles(files: NativeValue, count: number): PickedFile[] {
 	const copied: PickedFile[] = [];
-	const address = typeof files === "number" ? files : files instanceof r.RPickedFile ? addressOfStruct(files) : 0;
+	const address = typeof files === "number" || typeof files === "bigint" ? (files as Pointer) : files instanceof r.RPickedFile ? addressOfStruct(files) : null;
 	if (!address) {
 		return copied;
 	}
 	for (let index = 0; index < count; index++) {
-		const file = r.RPickedFile.from((address + index * r.RPickedFile.SIZE) as Pointer);
+		const file = r.RPickedFile.from(addressAt(address, index * r.RPickedFile.SIZE));
 		if (file) {
 			copied.push({
 				path: file.path,

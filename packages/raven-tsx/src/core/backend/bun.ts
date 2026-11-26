@@ -54,18 +54,29 @@ export function openLibrary<S extends Record<string, FFIFunction>>(path: string,
 }
 
 /** Calls a function of C given by its address, as a frame callback of the application: (double, void*). */
-export function callFunction(address: Pointer, seconds: number, userData: Pointer | null): void {
-	CFunction({ ptr: address, args: ["f64", "ptr"], returns: "void" })(seconds, userData);
+export function callFunction(address: Pointer | bigint | number, seconds: number, userData: Pointer | null): void {
+	// (bun:ffi takes an address as a bigint too)
+	CFunction({ ptr: address as Pointer, args: ["f64", "ptr"], returns: "void" })(seconds, userData);
 }
 
-/** The address of what an application gives as user data: an array, which stays alive meanwhile. */
-export function addressOf(userData: Pointer | NodeJS.TypedArray | null): Pointer | null {
-	return userData === null || typeof userData === "number" ? userData : ptr(userData);
+/**
+ * The address of what an application gives as user data: an array, which stays alive meanwhile, or an
+ * address. One as a bigint (as Node.js gives them) becomes a number, as bun:ffi gives addresses.
+ */
+export function addressOf(userData: Pointer | bigint | number | NodeJS.TypedArray | null): Pointer | null {
+	if (userData === null || typeof userData === "number") return userData as Pointer | null;
+	if (typeof userData === "bigint") return Number(userData) as Pointer;
+	return ptr(userData);
 }
 
 /** The address of a structure C gave: bun:ffi reads it where it is, so its bytes are there. */
 export function addressOfStruct(struct: { readonly _bytes: Uint8Array }): Pointer {
 	return ptr(struct._bytes);
+}
+
+/** An address `bytes` after another: on Bun both are numbers. */
+export function addressAt(address: Pointer, bytes: number): Pointer {
+	return (address + bytes) as Pointer;
 }
 
 /**

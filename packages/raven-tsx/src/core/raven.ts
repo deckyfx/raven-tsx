@@ -4,7 +4,8 @@
  *
  * `#raven` is Raven's binding for the runtime: for Bun (bun:ffi), or for Node.js (Raven's
  * Node-API addon). They have the same functions, structures and callbacks, under the same names;
- * the types are those of the binding for Bun.
+ * the types are those of the binding for Bun. One difference: an address is a number on Bun and a
+ * bigint on Node.js, whose binding keeps all 64 bits; both take either.
  */
 
 import "#native";

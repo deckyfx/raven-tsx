@@ -73,9 +73,12 @@ function nodeType(type: unknown): string {
 	return NODE_TYPES[String(type)] ?? RavenError.throw(`raven-tsx: no type of node:ffi for "${String(type)}"`);
 }
 
-/** An argument for an address: what bun:ffi takes there (a typed array, an address as a number, null), as node:ffi takes it. */
+/**
+ * An argument for an address: what bun:ffi takes there (a typed array, an address as a number,
+ * null) or what Raven's addon gives (a bigint), as node:ffi takes it.
+ */
 function nodePointer(value: unknown): unknown {
-	if (value === undefined || value === null || value === 0) {
+	if (value === undefined || value === null || value === 0 || value === 0n) {
 		return null;
 	}
 	return typeof value === "number" ? BigInt(value) : value;
@@ -138,12 +141,12 @@ export function foreignCallback(path: string, args: readonly NativeArg[], return
 }
 
 /** A function of C given by its address: Node.js has no way to call one. */
-export function callFunction(_address: Pointer, _seconds: number, _userData: Pointer | null): void {
+export function callFunction(_address: Pointer | bigint | number, _seconds: number, _userData: Pointer | null): void {
 	RavenError.throw("raven-tsx: a frame callback of C, given by its address, needs Bun");
 }
 
 /** What an application gives as user data, passed on as it is: Raven's addon reads it. */
-export function addressOf(userData: Pointer | NodeJS.TypedArray | null): Pointer | null {
+export function addressOf(userData: Pointer | bigint | number | NodeJS.TypedArray | null): Pointer | null {
 	return userData as Pointer | null;
 }
 
@@ -167,6 +170,12 @@ const pickedAt = new WeakMap<object, Pointer>();
 
 /** The address of a structure C gave, where it is in the memory of the library (not of a copy of it). */
 export function addressOfStruct(struct: { readonly _bytes: Uint8Array }): Pointer {
-	// (the binding of Node.js has `ptr`, as bun:ffi does: the types of #raven are those of Bun's binding)
+	// (the binding of Node.js has `ptr`, as bun:ffi does: the types of #raven are those of Bun's binding,
+	// and the address is a bigint)
 	return pickedAt.get(struct) ?? (raven as unknown as { ptr(view: Uint8Array): Pointer }).ptr(struct._bytes);
+}
+
+/** An address `bytes` after another: on Node.js a bigint, as Raven's addon gives addresses (a number is taken too). */
+export function addressAt(address: Pointer, bytes: number): Pointer {
+	return (BigInt(address) + BigInt(bytes)) as never as Pointer;
 }

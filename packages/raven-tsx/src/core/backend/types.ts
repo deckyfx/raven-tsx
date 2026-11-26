@@ -19,8 +19,12 @@ export interface StructType {
  */
 export type NativeArg = "u32" | "i32" | "f32" | "f64" | "pointer" | "text" | "float" | StructType;
 
-/** A value as the function receives it: a text as a string, a float to write as a `Float32Array`. */
-export type NativeValue = number | string | Float32Array | object | Pointer | null;
+/**
+ * A value as the function receives it: a text as a string, a float to write as a `Float32Array`, an
+ * address as a `Pointer`, which is a number on Bun and a bigint on Node.js (Raven's Node.js binding
+ * gives all 64 bits of an address, as a pointer of Android needs: its top byte holds a tag).
+ */
+export type NativeValue = number | bigint | string | Float32Array | object | Pointer | null;
 
 /** What C reads back: nothing, a number (an `int`, or an `Rid`), or a text valid until the next call. */
 export type NativeReturn = "void" | "i32" | "u32" | "text";
