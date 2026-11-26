@@ -43,15 +43,16 @@ class FrameSlot {
 
 	/** What `Rset_frame_callback` does: one function, replaced by the next, beside the subscribers. */
 	setApplication(callback: RFrameCallback | Pointer | null, userData: RPointer): void {
-		// (the address of a function of C: a number on Bun, a bigint on Node.js)
-		if (typeof callback === "number" || typeof callback === "bigint") {
-			// a function of C: called from here, as it no longer has the slot to itself
+		if (!callback) {
+			// (none: null, or the address 0, as 0 on Bun and 0n on Node.js)
+			this.application = null;
+		} else if (typeof callback === "number" || typeof callback === "bigint") {
+			// a function of C (its address: a number on Bun, a bigint on Node.js), called from here, as it
+			// no longer has the slot to itself
 			this.application = (delta) => callFunction(callback, delta, addressOf(userData));
-		} else if (callback) {
+		} else {
 			// an address, as C would give it. An array stays alive for as long as this function does.
 			this.application = (delta) => void callback(delta, addressOf(userData));
-		} else {
-			this.application = null;
 		}
 		this.sync();
 	}

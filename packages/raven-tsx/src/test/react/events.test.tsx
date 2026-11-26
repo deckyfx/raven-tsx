@@ -398,6 +398,21 @@ test("Rset_frame_callback gives a function of JavaScript its user data, as C wou
 	raven.Rset_frame_callback(null);
 });
 
+test("Rset_frame_callback with the address 0, a number or a bigint, takes the function away as null does", async () => {
+	await mount(<VBox><Label Name="t">t</Label></VBox>);
+	// (0 on Bun, 0n on Node.js: a function of C at 0 would be called, and crash, at the next frame)
+	for (const none of [0, 0n]) {
+		let calls = 0;
+		raven.Rset_frame_callback(() => void calls++);
+		r.Rdraw_frame();
+		expect(calls).toBe(1);
+		raven.Rset_frame_callback(none as never);
+		r.Rdraw_frame();
+		r.Rdraw_frame();
+		expect(calls).toBe(1);
+	}
+});
+
 test("an exception in a frame function does not stop the others", async () => {
 	const report = console.error;
 	const reported: string[] = [];
