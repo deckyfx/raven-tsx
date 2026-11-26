@@ -392,6 +392,10 @@ test("Rset_frame_callback gives a function of JavaScript its user data, as C wou
 	raven.Rset_frame_callback((_delta, userData) => void seen.push(userData), ptr(data));
 	r.Rdraw_frame();
 	expect(seen.at(-1)).toBe(ptr(data));
+	// (an address as a bigint, as Node.js gives them, reaches it as an address of Bun: a number)
+	raven.Rset_frame_callback((_delta, userData) => void seen.push(userData), BigInt(ptr(data)));
+	r.Rdraw_frame();
+	expect(seen.at(-1)).toBe(ptr(data));
 	raven.Rset_frame_callback((_delta, userData) => void seen.push(userData));
 	r.Rdraw_frame();
 	expect(seen.at(-1)).toBeNull();
@@ -411,7 +415,7 @@ test("Rset_frame_callback with the address 0, a number or a bigint, takes the fu
 			raven.Rset_frame_callback(() => void calls++);
 			r.Rdraw_frame();
 			expect(calls).toBe(1);
-			raven.Rset_frame_callback(none as never);
+			raven.Rset_frame_callback(none);
 			r.Rdraw_frame();
 			r.Rdraw_frame();
 			expect(calls).toBe(1);

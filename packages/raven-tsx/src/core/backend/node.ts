@@ -141,12 +141,12 @@ export function foreignCallback(path: string, args: readonly NativeArg[], return
 }
 
 /** A function of C given by its address: Node.js has no way to call one. */
-export function callFunction(_address: Pointer, _seconds: number, _userData: Pointer | null): void {
+export function callFunction(_address: Pointer | bigint | number, _seconds: number, _userData: Pointer | null): void {
 	RavenError.throw("raven-tsx: a frame callback of C, given by its address, needs Bun");
 }
 
 /** What an application gives as user data, passed on as it is: Raven's addon reads it. */
-export function addressOf(userData: Pointer | NodeJS.TypedArray | null): Pointer | null {
+export function addressOf(userData: Pointer | bigint | number | NodeJS.TypedArray | null): Pointer | null {
 	return userData as Pointer | null;
 }
 
